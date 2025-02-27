@@ -12,6 +12,6 @@ Currently this algorithm achieves ~10-20% worse tours than the optimal algorithm
 
 ## Problems
 
-1. It is much slower than it should be, probably due to all the adding and deleting to R-trees that I do. Theoretically it should be $\operatorname{O}(n\operatorname{polylog}(n))$, but constants don't care about your theoretical analysis. 
+1. It is much slower than it should be, probably due to all the adding and deleting to R-trees that I do. Theoretically it should be $O(n \times polylog(n))$, but constants don't care about your theoretical analysis. 
 
 2. It crashes sometimes. I am trying to fix this. 
