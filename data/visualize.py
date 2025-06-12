@@ -2,75 +2,61 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import os
 
-# Function to read the file and draw the plot
-def draw_shapes_from_file(input_file, output_dir):
-    # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
+# Function to read the files and draw the plot
+def draw_shapes_from_files(input_file, output_file, image_dir):
+    # Create image directory if it doesn't exist
+    os.makedirs(image_dir, exist_ok=True)
 
-    # Read the data from the file
-    points = []
-    total_length = None  # Initialize total_length variable
-
+    # Read the circle data from the input file
+    circles = []
     with open(input_file, 'r') as infile:
-        lines = infile.readlines()
-        
-        # Skip the first line (header or irrelevant info)
-        for line in lines[1:-1]:  # Process all lines except the first and the last one
+        for line in infile:
             if line.strip():  # Skip empty lines
                 values = list(map(float, line.split()))
-                if len(values) == 5:  # Ensure the line has 5 numbers
-                    points.append(values)
+                if len(values) == 3:  # Ensure the line has 3 numbers (x, y, r)
+                    circles.append(values)
 
-        # Extract the total length from the last line
-        last_line = lines[-1].strip()
-        if last_line.startswith("Total tour distance:"):
-            try:
-                total_length = float(last_line.split(":")[1].strip())  # Extract number after the colon
-            except ValueError:
-                print("The last line does not contain a valid number for total length.")
-    
+    # Read the tour data from the output file
+    tour_points = []
+    with open(output_file, 'r') as outfile:
+        for line in outfile:
+            if line.strip():  # Skip empty lines
+                values = list(map(float, line.split()))
+                if len(values) == 2:  # Ensure the line has 2 numbers (x, y)
+                    tour_points.append(values)
+
+    # Calculate the total tour distance
+    total_length = 0
+    if tour_points:
+        for i in range(len(tour_points)):
+            x1, y1 = tour_points[i]
+            x2, y2 = tour_points[(i + 1) % len(tour_points)]  # Wrap around to the first point
+            total_length += ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+
     # Prepare to plot
     fig, ax = plt.subplots()
-
-    # List to store the second points for the lines
-    line_points = []
 
     # Variables to track min/max for the plot limits
     min_x, min_y = float('inf'), float('inf')
     max_x, max_y = float('-inf'), float('-inf')
 
-    # Draw circles, lines, and points
-    for (x1, y1, d, x2, y2) in points:
-        # Draw the circle centered at (x1, y1) with radius d
-        circle = patches.Circle((x1, y1), d, edgecolor='blue', facecolor='none', linewidth=0.5)
+    # Draw circles
+    for (x, y, r) in circles:
+        circle = patches.Circle((x, y), r, edgecolor='blue', facecolor='none', linewidth=0.5)
         ax.add_patch(circle)
 
-        # Plot the black point at (x1, y1)
-        # ax.plot(x1, y1, 'ko', markersize=6)
-
-        # Plot the green point at (x2, y2)
-        # ax.plot(x2, y2, 'go', markersize=6)
-
-        # Append (x2, y2) to the line_points list for connecting lines
-        line_points.append((x2, y2))
-
         # Update min/max for axis limits based on the circle centers and radii
-        min_x = min(min_x, x1 - d)
-        min_y = min(min_y, y1 - d)
-        max_x = max(max_x, x1 + d)
-        max_y = max(max_y, y1 + d)
+        min_x = min(min_x, x - r)
+        min_y = min(min_y, y - r)
+        max_x = max(max_x, x + r)
+        max_y = max(max_y, y + r)
 
-    # Connect the points in line_points list with red lines (connect second points)
-    if line_points:
-        for i in range(len(line_points) - 1):
-            x1, y1 = line_points[i]
-            x2, y2 = line_points[i + 1]
+    # Draw the tour
+    if tour_points:
+        for i in range(len(tour_points)):
+            x1, y1 = tour_points[i]
+            x2, y2 = tour_points[(i + 1) % len(tour_points)]  # Wrap around to the first point
             ax.plot([x1, x2], [y1, y2], 'r-', linewidth=1)
-
-        # Connect the last point back to the first one
-        x1, y1 = line_points[-1]
-        x2, y2 = line_points[0]
-        ax.plot([x1, x2], [y1, y2], 'r-', linewidth=1)
 
     # Set the aspect ratio to be equal
     ax.set_aspect('equal', 'box')
@@ -78,7 +64,7 @@ def draw_shapes_from_file(input_file, output_dir):
     # Set labels and title
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
-    ax.set_title(f'Circles, Lines, and Points\nTotal Tour Length: {total_length}' if total_length else 'Circles, Lines, and Points')
+    ax.set_title(f'Tour and Circles\nTotal Tour Length: {total_length:.2f}')
 
     # Set a grid
     ax.grid(True)
@@ -88,19 +74,23 @@ def draw_shapes_from_file(input_file, output_dir):
     ax.set_ylim(min_y - 1, max_y + 1)
 
     # Save the plot to a file
-    output_file = os.path.join(output_dir, f'{os.path.basename(input_file)}_plot.png')
-    plt.savefig(output_file)
+    output_image = os.path.join(image_dir, f'{os.path.basename(input_file)}_plot.png')
+    plt.savefig(output_image)
 
     # Close the plot
     plt.close(fig)
-    print(f"Plot saved to {output_file}")
+    print(f"Plot saved to {output_image}")
 
-# Process all files in the input directory
-input_dir = './cmu_output'  # Input directory with the files
-output_dir = './output_images'   # Output directory for the images
+
+# Process all files in the input and output directories
+input_dir = './cmu_processed'  # Input directory with circle files
+output_dir = './cmu_output'  # Output directory with tour files
+image_dir = './output_images'  # Directory for the generated images
 
 # Iterate over all files in the input directory
 for filename in os.listdir(input_dir):
     if filename.endswith('.txt'):  # Only process .txt files
         input_file = os.path.join(input_dir, filename)
-        draw_shapes_from_file(input_file, output_dir)
+        output_file = os.path.join(output_dir, filename)  # Corresponding file in output_dir
+        if os.path.exists(output_file):  # Ensure the corresponding tour file exists
+            draw_shapes_from_files(input_file, output_file, image_dir)

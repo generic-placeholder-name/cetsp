@@ -5,12 +5,15 @@ import re
 input_dir = './cmu'
 output_dir = './cmu_processed'
 
+# These are processed separately
+exceptions = ['d493.cetsp', 'dsj1000.cetsp', 'kroD100.cetsp', 'lin318.cetsp', 'pcb442.cetsp', 'rat195.cetsp', 'rd400.cetsp']
+
 # Create the output directory if it doesn't exist
 os.makedirs(output_dir, exist_ok=True)
 
 # Iterate over all files in the input directory
 for filename in os.listdir(input_dir):
-    if filename.endswith('.cetsp'):
+    if filename.endswith('.cetsp') and filename not in exceptions:
         input_path = os.path.join(input_dir, filename)
         output_path = os.path.join(output_dir, filename.replace(".cetsp", ".txt"))
 
