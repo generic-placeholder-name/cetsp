@@ -8,6 +8,10 @@ Basically, it uses a heuristic based on the [pair-center algorithm](https://www.
 
 Furthermore, every once in a while, a node will be deleted, and every circle corresponding to that node will be re-inserted into the tree. Also, occasionally, a node will have its position optimized based on its two neighboring points.
 
+## Requirements
+
+You must have Boost installed. Abseil is also used for fast hash maps; you can use the STL ones instead, but it is slower. 
+
 ## Results
 
 Currently, this algorithm achieves approximately 0–5% worse tours than SOTA on the Mennell dataset. Visualized tours can be found in [`data/output_images`](./data/output_images). 

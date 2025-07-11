@@ -25,6 +25,8 @@ using HashSet = std::unordered_set<T>;
 #include <boost/geometry.hpp>
 #include <boost/geometry/index/rtree.hpp>
 
+#include "LKH.hpp"
+
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 
@@ -739,7 +741,6 @@ void optimizeTourPoint(
     std::cerr << "[optimizeTourPoint] Optimization complete for node id=" << node->id << " at (" << bg::get<0>(node->pos) << ", " << bg::get<1>(node->pos) << ")" << std::endl;
 }
 
-size_t totInserts = 0; // Global counter for debugging
 // Insert the circle `cid` (with data in `tn`) into the current tour starting at `head`.
 // Updates energies, and if any neighbor hits energy=0, recursively removes it and
 // reinserts its linked circles in ascending‐radius order.
@@ -754,7 +755,6 @@ void insertCircle(
     std::vector<TourNode*>& map,
     const std::vector<TreeNode>& allNodes
 ) {
-    totInserts++;
     const Point& center = tn.center;
     double rad = tn.r;
 
@@ -882,6 +882,7 @@ void insertCircle(
 // Given a merge tree (vector<TreeNode>), reconstruct the tour by "unmerging" nodes.
 // At each step, remove the highest-weight internal node from the tour and insert its children.
 // Returns the sequence of tour points.
+template<bool USE_SLOW_OPTIMIZATIONS = false>
 std::vector<Point> unmerge(std::vector<TreeNode> treeNodes) {
     size_t N = treeNodes.size();
 
@@ -959,47 +960,125 @@ std::vector<Point> unmerge(std::vector<TreeNode> treeNodes) {
 
         // Once in a while, optimize all nodes in the tour
         if ((nodesProcessed >= 2 && (nodesProcessed & (nodesProcessed - 1)) == 0) || pq.empty()) {
-            // Optimize all points in the tour
-            for (size_t nid = N; nid-- > 0;) {
-                if (map[nid] == nullptr) continue; // Skip if not in the tour
-                TourNode* t = map[nid];
-                if (t) {
-                    t->insertions++;
-                    if (t->insertions >= 2 && (t->insertions & (t->insertions - 1)) == 0) {
-                        std::cerr << "Optimizing TourNode id=" << t->id << " at (" << bg::get<0>(t->pos) << ", " << bg::get<1>(t->pos) << ")" << std::endl;
-                        optimizeTourPoint(t, head, rtreeP, rtreeS, map, treeNodes);
-                    }
-                }
-            }
-            
-            // Interleave optimization with energy reduction
-            // For every node in the pq, decrease energy and handle zero-energy nodes
-            for (size_t nid = N; nid-- > 0;) {
-                std::cerr << "Processing node id=" << nid << " for energy reduction." << std::endl;
-                if (map[nid] == nullptr) continue; // Skip if not in the tour
-                TourNode* t = map[nid];
-                if (t) {
-                    t->energy--;
-                    if (t->energy == 0) {
-                        std::vector<size_t> linked(t->circles.begin(), t->circles.end());
-                        deleteTourNode(head, t, rtreeP, rtreeS, map);
-                        std::sort(linked.begin(), linked.end(), [&](size_t a, size_t b) { return treeNodes[a].r < treeNodes[b].r; });
-                        for (size_t oc : linked) {
-                            insertCircle(oc, treeNodes[oc], head, rtreeP, rtreeS, map, treeNodes);
+            if constexpr(USE_SLOW_OPTIMIZATIONS) {
+                std::cerr << "Performing slow optimizations" << std::endl;
+                // TODO: Implement slow optimizations here
+
+                // one instance of SOCP
+
+                // For every node in the pq, decrease energy and handle zero-energy nodes
+                for (size_t nid = N; nid-- > 0;) {
+                    std::cerr << "Processing node id=" << nid << " for energy reduction." << std::endl;
+                    if (map[nid] == nullptr) continue; // Skip if not in the tour
+                    TourNode* t = map[nid];
+                    if (t) {
+                        t->energy--;
+                        if (t->energy == 0) {
+                            std::vector<size_t> linked(t->circles.begin(), t->circles.end());
+                            deleteTourNode(head, t, rtreeP, rtreeS, map);
+                            std::sort(linked.begin(), linked.end(), [&](size_t a, size_t b) { return treeNodes[a].r < treeNodes[b].r; });
+                            for (size_t oc : linked) {
+                                insertCircle(oc, treeNodes[oc], head, rtreeP, rtreeS, map, treeNodes);
+                            }
                         }
                     }
                 }
-            }
 
-            // Optimize all points in the tour
-            for (size_t nid = N; nid-- > 0;) {
-                if (map[nid] == nullptr) continue; // Skip if not in the tour
-                TourNode* t = map[nid];
-                if (t) {
-                    t->insertions++;
-                    if (t->insertions >= 2 && (t->insertions & (t->insertions - 1)) == 0) {
-                        std::cerr << "Optimizing TourNode id=" << t->id << " at (" << bg::get<0>(t->pos) << ", " << bg::get<1>(t->pos) << ")" << std::endl;
-                        optimizeTourPoint(t, head, rtreeP, rtreeS, map, treeNodes);
+                // One instance of LKH
+                if (rtreeP.size() > 4) { // If tour too small, no optimization potential
+                    // Extract TourNodes into a vector in current tour order
+                    std::vector<TourNode*> tourNodesVec;
+                    if (head) {
+                        TourNode* cur = head;
+                        do {
+                            tourNodesVec.push_back(cur);
+                            cur = cur->next;
+                        } while (cur != head);
+                    }
+
+                    // Extract the current tour points in order
+                    std::vector<Point> lkhTour;
+                    for (TourNode* node : tourNodesVec) {
+                        lkhTour.push_back(node->pos);
+                    }
+
+                    // Call LKH to get the new order (returns permutation of indices)
+                    std::vector<size_t> lkhOrder;
+                    if (!lkhTour.empty()) {
+                        lkhOrder = solve_tsp_with_lkh(lkhTour);
+                    }
+
+                    // Reorder tourNodesVec according to the new order
+                    std::vector<TourNode*> newOrder;
+                    for (size_t idx : lkhOrder) {
+                        newOrder.push_back(tourNodesVec[idx]);
+                    }
+                    tourNodesVec = std::move(newOrder);
+
+                    // Reorient prev/next pointers
+                    for (size_t i = 0; i < tourNodesVec.size(); ++i) {
+                        TourNode* prev = tourNodesVec[(i + tourNodesVec.size() - 1) % tourNodesVec.size()];
+                        TourNode* next = tourNodesVec[(i + 1) % tourNodesVec.size()];
+                        tourNodesVec[i]->prev = prev;
+                        tourNodesVec[i]->next = next;
+                    }
+                    head = tourNodesVec.empty() ? nullptr : tourNodesVec[0];
+
+                    // Rebuild R-trees
+                    rtreeP.clear();
+                    rtreeS.clear();
+                    for (TourNode* node : tourNodesVec) {
+                        rtreeP.insert({node->pos, node->id});
+                    }
+                    for (TourNode* node : tourNodesVec) {
+                        rtreeS.insert({Segment(node->pos, node->next->pos), node->id});
+                    }
+                }
+
+                // one instance of SOCP
+            } else {
+                // Optimize all points in the tour
+                for (size_t nid = N; nid-- > 0;) {
+                    if (map[nid] == nullptr) continue; // Skip if not in the tour
+                    TourNode* t = map[nid];
+                    if (t) {
+                        t->insertions++;
+                        if (t->insertions >= 2 && (t->insertions & (t->insertions - 1)) == 0) {
+                            std::cerr << "Optimizing TourNode id=" << t->id << " at (" << bg::get<0>(t->pos) << ", " << bg::get<1>(t->pos) << ")" << std::endl;
+                            optimizeTourPoint(t, head, rtreeP, rtreeS, map, treeNodes);
+                        }
+                    }
+                }
+                
+                // Interleave optimization with energy reduction
+                // For every node in the pq, decrease energy and handle zero-energy nodes
+                for (size_t nid = N; nid-- > 0;) {
+                    std::cerr << "Processing node id=" << nid << " for energy reduction." << std::endl;
+                    if (map[nid] == nullptr) continue; // Skip if not in the tour
+                    TourNode* t = map[nid];
+                    if (t) {
+                        t->energy--;
+                        if (t->energy == 0) {
+                            std::vector<size_t> linked(t->circles.begin(), t->circles.end());
+                            deleteTourNode(head, t, rtreeP, rtreeS, map);
+                            std::sort(linked.begin(), linked.end(), [&](size_t a, size_t b) { return treeNodes[a].r < treeNodes[b].r; });
+                            for (size_t oc : linked) {
+                                insertCircle(oc, treeNodes[oc], head, rtreeP, rtreeS, map, treeNodes);
+                            }
+                        }
+                    }
+                }
+
+                // Optimize all points in the tour
+                for (size_t nid = N; nid-- > 0;) {
+                    if (map[nid] == nullptr) continue; // Skip if not in the tour
+                    TourNode* t = map[nid];
+                    if (t) {
+                        t->insertions++;
+                        if (t->insertions >= 2 && (t->insertions & (t->insertions - 1)) == 0) {
+                            std::cerr << "Optimizing TourNode id=" << t->id << " at (" << bg::get<0>(t->pos) << ", " << bg::get<1>(t->pos) << ")" << std::endl;
+                            optimizeTourPoint(t, head, rtreeP, rtreeS, map, treeNodes);
+                        }
                     }
                 }
             }
@@ -1074,8 +1153,6 @@ std::vector<Point> CETSP(const std::vector<Circle>& circles) {
     double bestDist = std::numeric_limits<double>::infinity();
     std::vector<Point> bestTour;
 
-    totInserts = 0; // Reset global insert counter
-
     // Step 1: Remove covering circles to simplify the problem
     removeCoveringCircles(circlesCopy);
 
@@ -1108,7 +1185,7 @@ std::vector<Point> CETSP(const std::vector<Circle>& circles) {
         std::cout << "Tour verification failed." << std::endl;
     }
     else {
-        std::cout << "Tour verification passed. Number of elements: " << circles.size() << ", Total inserts: " << totInserts << std::endl;
+        std::cout << "Tour verification passed. Number of elements: " << circles.size() << std::endl;
     }
 
     // Return the valid tour
@@ -1196,4 +1273,3 @@ int main() {
 
     return 0;
 }
-
