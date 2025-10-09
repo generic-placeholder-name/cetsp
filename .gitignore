@@ -6,3 +6,10 @@
 
 # Build directory
 build/
+
+# Ignore everything in the paper/ directory
+paper/*
+
+# But keep these specific files
+!paper/paper.pdf
+!paper/readme.md
