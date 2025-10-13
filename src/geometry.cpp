@@ -13,6 +13,8 @@ double gapDist(const Point& a, const Point& b, double ra, double rb) {
 }
 
 std::pair<Point, double> makeCombinedCircle(const Point& p1, double r1, const Point& p2, double r2) {
+    // Basically, a circle approximating the "lens" shape formed by the intersection of two circles.
+    // This choice is largely arbitrary but seems to work better than just taking the midpoint.
     double x1 = bg::get<0>(p1), y1 = bg::get<1>(p1);
     double x2 = bg::get<0>(p2), y2 = bg::get<1>(p2);
     double dx = x2 - x1, dy = y2 - y1;

@@ -16,6 +16,7 @@ struct Settings {
     std::filesystem::path outputDir = "./data/cmu_output";
     std::vector<std::string> filesToRead; // empty = process all
     std::optional<std::filesystem::path> logFile; // optional log file
+    int numRepeats = 10; // Number of repetitions for CETSP
 };
 
 // Read settings from a file (very simple: key value per line)
@@ -41,6 +42,8 @@ Settings loadSettings(const std::string& settingsFile) {
             std::string path;
             in >> path;
             s.logFile = path;
+        } else if (key == "numRepeats") {
+            in >> s.numRepeats;
         }
     }
     return s;
@@ -52,6 +55,19 @@ int main() {
 
     // Load settings
     Settings settings = loadSettings("settings.txt");
+    std::cout << "Settings:\n";
+    std::cout << "  Input directory: " << settings.inputDir << "\n";
+    std::cout << "  Output directory: " << settings.outputDir << "\n";
+    if (!settings.filesToRead.empty()) {
+        std::cout << "  Files to read:\n";
+        for (const auto& f : settings.filesToRead) {
+            std::cout << "    " << f << "\n";
+        }
+    } else {
+        std::cout << "  Processing all files in input directory.\n";
+    }
+    std::cout << "  Log file: " << (settings.logFile ? settings.logFile->string() : "stdout") << "\n";
+    std::cout << "  Number of repetitions: " << settings.numRepeats << "\n";
 
     // Set up logging
     std::ofstream logFile;
@@ -108,7 +124,7 @@ int main() {
         inFile.close();
 
         // Generate the tour using the CETSP algorithm
-        auto tour = CETSP(circles);
+        auto tour = CETSP(circles, settings.numRepeats);
         if (tour.empty()) {
             logStream << "Failed to generate a valid tour for file: " << inputFile << "\n";
             continue;
@@ -121,13 +137,14 @@ int main() {
             continue;
         }
 
+        double dist = totalTourDistance(tour);
         outFile << std::fixed << std::setprecision(4);
+        outFile << dist << "\n";
         for (const auto& p : tour) {
             outFile << bg::get<0>(p) << " " << bg::get<1>(p) << "\n";
         }
         outFile.close();
 
-        double dist = totalTourDistance(tour);
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 

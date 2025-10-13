@@ -10,4 +10,4 @@ bool verifyTour(const std::vector<Point>& tour, const std::vector<Circle>& circl
 
 double totalTourDistance(const std::vector<Point>& tour);
 
-std::vector<Point> CETSP(const std::vector<Circle>& circles);
+std::vector<Point> CETSP(const std::vector<Circle>& circles, int numRepeats = 10);

@@ -61,7 +61,7 @@ cmake .. -DUSE_ABSEIL_HASH_SET=ON -DDEBUG=OFF -G "MinGW Makefiles"
 ./build/CETSP_project.exe
 ```
 
-* On Windows, you can also double-click the `.exe` in `build/Debug` or `build/Release` depending on your configuration.
+* On Windows, you can also double-click the `.exe`.
 
 ## Results
 

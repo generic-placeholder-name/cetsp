@@ -42,7 +42,7 @@ double totalTourDistance(const std::vector<Point>& tour) {
     return totalDist;
 }
 
-std::vector<Point> CETSP(const std::vector<Circle>& circles) {
+std::vector<Point> CETSP(const std::vector<Circle>& circles, int numRepeats) {
     auto circlesCopy = circles; // Make a copy to avoid modifying the input
 
     // Initialize the best tour and distance
@@ -59,8 +59,7 @@ std::vector<Point> CETSP(const std::vector<Circle>& circles) {
     }
 
     // Repeat for some number of iterations
-    constexpr int REPEAT_ITERS = 10;
-    for (int iter = 0; iter < REPEAT_ITERS; ++iter) {
+    for (int iter = 0; iter < numRepeats; ++iter) {
         // Step 2: Build the merge tree from the remaining circles
         std::vector<TreeNode> mergeTree = buildMergeTree(circlesCopy);
 
