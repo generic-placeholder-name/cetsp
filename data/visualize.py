@@ -16,22 +16,24 @@ def draw_shapes_from_files(input_file, output_file, image_dir):
                 if len(values) == 3:  # Ensure the line has 3 numbers (x, y, r)
                     circles.append(values)
 
-    # Read the tour data from the output file
+    # Read the tour data and total distance from the output file
     tour_points = []
-    with open(output_file, 'r') as outfile:
-        for line in outfile:
-            if line.strip():  # Skip empty lines
-                values = list(map(float, line.split()))
-                if len(values) == 2:  # Ensure the line has 2 numbers (x, y)
-                    tour_points.append(values)
+    total_length = 0.0
 
-    # Calculate the total tour distance
-    total_length = 0
-    if tour_points:
-        for i in range(len(tour_points)):
-            x1, y1 = tour_points[i]
-            x2, y2 = tour_points[(i + 1) % len(tour_points)]  # Wrap around to the first point
-            total_length += ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+    with open(output_file, 'r') as outfile:
+        lines = [line.strip() for line in outfile if line.strip()]  # Skip empty lines
+        if lines:
+            try:
+                total_length = float(lines[0])  # First line = total tour length
+            except ValueError:
+                print(f"Warning: Could not parse total length from {output_file}. Defaulting to 0.")
+                total_length = 0.0
+
+            # Remaining lines are tour points
+            for line in lines[1:]:
+                values = list(map(float, line.split()))
+                if len(values) == 2:
+                    tour_points.append(values)
 
     # Prepare to plot
     fig, ax = plt.subplots()
@@ -84,7 +86,7 @@ def draw_shapes_from_files(input_file, output_file, image_dir):
 
 # Process all files in the input and output directories
 input_dir = './cmu_processed'  # Input directory with circle files
-output_dir = './cmu_output'  # Output directory with tour files
+output_dir = './cmu_output'    # Output directory with tour files
 image_dir = './output_images'  # Directory for the generated images
 
 # Iterate over all files in the input directory
