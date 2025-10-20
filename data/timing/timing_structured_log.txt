@@ -1,0 +1,30 @@
+Input directory: "./data/timing_structured_input"
+Output directory: "./data/timing_structured_output"
+Processing file: "./data/timing_structured_input\\test_n1024.txt"
+Finished processing file: "./data/timing_structured_input\\test_n1024.txt"; CETSP algorithm run in 54 ms, distance=633.82
+Processing file: "./data/timing_structured_input\\test_n1048576.txt"
+Finished processing file: "./data/timing_structured_input\\test_n1048576.txt"; CETSP algorithm run in 161745 ms, distance=689805
+Processing file: "./data/timing_structured_input\\test_n128.txt"
+Finished processing file: "./data/timing_structured_input\\test_n128.txt"; CETSP algorithm run in 3 ms, distance=81.3965
+Processing file: "./data/timing_structured_input\\test_n131072.txt"
+Finished processing file: "./data/timing_structured_input\\test_n131072.txt"; CETSP algorithm run in 13007 ms, distance=86321.7
+Processing file: "./data/timing_structured_input\\test_n16384.txt"
+Finished processing file: "./data/timing_structured_input\\test_n16384.txt"; CETSP algorithm run in 2045 ms, distance=10650.3
+Processing file: "./data/timing_structured_input\\test_n2048.txt"
+Finished processing file: "./data/timing_structured_input\\test_n2048.txt"; CETSP algorithm run in 177 ms, distance=1343.89
+Processing file: "./data/timing_structured_input\\test_n256.txt"
+Finished processing file: "./data/timing_structured_input\\test_n256.txt"; CETSP algorithm run in 14 ms, distance=150.373
+Processing file: "./data/timing_structured_input\\test_n262144.txt"
+Finished processing file: "./data/timing_structured_input\\test_n262144.txt"; CETSP algorithm run in 41731 ms, distance=172164
+Processing file: "./data/timing_structured_input\\test_n32768.txt"
+Finished processing file: "./data/timing_structured_input\\test_n32768.txt"; CETSP algorithm run in 4179 ms, distance=21580.5
+Processing file: "./data/timing_structured_input\\test_n4096.txt"
+Finished processing file: "./data/timing_structured_input\\test_n4096.txt"; CETSP algorithm run in 407 ms, distance=2624.18
+Processing file: "./data/timing_structured_input\\test_n512.txt"
+Finished processing file: "./data/timing_structured_input\\test_n512.txt"; CETSP algorithm run in 36 ms, distance=324.689
+Processing file: "./data/timing_structured_input\\test_n524288.txt"
+Finished processing file: "./data/timing_structured_input\\test_n524288.txt"; CETSP algorithm run in 65274 ms, distance=345487
+Processing file: "./data/timing_structured_input\\test_n65536.txt"
+Finished processing file: "./data/timing_structured_input\\test_n65536.txt"; CETSP algorithm run in 5683 ms, distance=42868
+Processing file: "./data/timing_structured_input\\test_n8192.txt"
+Finished processing file: "./data/timing_structured_input\\test_n8192.txt"; CETSP algorithm run in 592 ms, distance=5319.57

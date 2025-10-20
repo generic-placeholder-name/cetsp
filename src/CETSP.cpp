@@ -77,10 +77,10 @@ std::vector<Point> CETSP(const std::vector<Circle>& circles, int numRepeats) {
     }
 
     if (bestTour.empty()) {
-        std::cout << "Tour verification failed." << std::endl;
+        DBG("Tour verification failed.");
     }
     else {
-        std::cout << "Tour verification passed. Number of elements: " << circles.size() << std::endl;
+        DBG("Tour verification passed. Number of elements: " << circles.size());
     }
 
     // Return the valid tour

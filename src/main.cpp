@@ -67,7 +67,7 @@ int main() {
         std::cout << "  Processing all files in input directory.\n";
     }
     std::cout << "  Log file: " << (settings.logFile ? settings.logFile->string() : "stdout") << "\n";
-    std::cout << "  Number of repetitions: " << settings.numRepeats << "\n";
+    std::cout << "  Number of repetitions: " << settings.numRepeats << std::endl;
 
     // Set up logging
     std::ofstream logFile;
@@ -106,13 +106,11 @@ int main() {
 
         logStream << "Processing file: " << inputFile << "\n";
 
-        auto startTime = std::chrono::high_resolution_clock::now();
-
         // Read circles from the input file
         std::vector<Circle> circles;
         std::ifstream inFile(inputFile);
         if (!inFile) {
-            logStream << "Failed to open input file: " << inputFile << "\n";
+            logStream << "Failed to open input file: " << inputFile << std::endl;
             continue;
         }
 
@@ -123,12 +121,17 @@ int main() {
         }
         inFile.close();
 
+        auto startTime = std::chrono::high_resolution_clock::now();
+
         // Generate the tour using the CETSP algorithm
         auto tour = CETSP(circles, settings.numRepeats);
         if (tour.empty()) {
             logStream << "Failed to generate a valid tour for file: " << inputFile << "\n";
             continue;
         }
+
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
         // Write the tour points to the output file
         std::ofstream outFile(outputFile);
@@ -145,11 +148,8 @@ int main() {
         }
         outFile.close();
 
-        auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-
         logStream << "Finished processing file: " << inputFile
-                  << " in " << duration << " ms, distance=" << dist << "\n";
+                  << "; CETSP algorithm run in " << duration << " ms, distance=" << dist << std::endl;
     }
 
     return 0;

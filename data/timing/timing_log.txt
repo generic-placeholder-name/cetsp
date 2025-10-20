@@ -1,0 +1,30 @@
+Input directory: "./data/timing_input"
+Output directory: "./data/timing_output"
+Processing file: "./data/timing_input\\test_n1024.txt"
+Finished processing file: "./data/timing_input\\test_n1024.txt" in 550 ms, distance=38988.1
+Processing file: "./data/timing_input\\test_n1048576.txt"
+Finished processing file: "./data/timing_input\\test_n1048576.txt" in 198618 ms, distance=1.80307e+08
+Processing file: "./data/timing_input\\test_n128.txt"
+Finished processing file: "./data/timing_input\\test_n128.txt" in 46 ms, distance=2142.36
+Processing file: "./data/timing_input\\test_n131072.txt"
+Finished processing file: "./data/timing_input\\test_n131072.txt" in 49155 ms, distance=1.7474e+07
+Processing file: "./data/timing_input\\test_n16384.txt"
+Finished processing file: "./data/timing_input\\test_n16384.txt" in 9578 ms, distance=1.47434e+06
+Processing file: "./data/timing_input\\test_n2048.txt"
+Finished processing file: "./data/timing_input\\test_n2048.txt" in 1264 ms, distance=99082
+Processing file: "./data/timing_input\\test_n256.txt"
+Finished processing file: "./data/timing_input\\test_n256.txt" in 116 ms, distance=5361.39
+Processing file: "./data/timing_input\\test_n262144.txt"
+Finished processing file: "./data/timing_input\\test_n262144.txt" in 74206 ms, distance=3.87163e+07
+Processing file: "./data/timing_input\\test_n32768.txt"
+Finished processing file: "./data/timing_input\\test_n32768.txt" in 16677 ms, distance=3.42101e+06
+Processing file: "./data/timing_input\\test_n4096.txt"
+Finished processing file: "./data/timing_input\\test_n4096.txt" in 2505 ms, distance=250100
+Processing file: "./data/timing_input\\test_n512.txt"
+Finished processing file: "./data/timing_input\\test_n512.txt" in 248 ms, distance=14707.7
+Processing file: "./data/timing_input\\test_n524288.txt"
+Finished processing file: "./data/timing_input\\test_n524288.txt" in 121820 ms, distance=8.42206e+07
+Processing file: "./data/timing_input\\test_n65536.txt"
+Finished processing file: "./data/timing_input\\test_n65536.txt" in 30758 ms, distance=7.80569e+06
+Processing file: "./data/timing_input\\test_n8192.txt"
+Finished processing file: "./data/timing_input\\test_n8192.txt" in 5161 ms, distance=612537

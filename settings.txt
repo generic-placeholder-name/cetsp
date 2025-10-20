@@ -1,1 +1,4 @@
-numRepeats 10
+numRepeats 1
+inputDir ./data/timing/timing_structured_input
+outputDir ./data/timing/timing_structured_output
+logFile ./data/timing/timing_structured_log.txt
