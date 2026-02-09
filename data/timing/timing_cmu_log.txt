@@ -1,0 +1,188 @@
+Input directory: "./data/cmu_processed"
+Output directory: "./data/timing/timing_cmu_output"
+Processing file: "./data/cmu_processed\\bonus1000.txt"
+Finished processing file: "./data/cmu_processed\\bonus1000.txt"; CETSP algorithm run in 300 ms, distance=385.517
+Processing file: "./data/cmu_processed\\bonus1000rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\bonus1000rdmRad.txt"; CETSP algorithm run in 239 ms, distance=955.354
+Processing file: "./data/cmu_processed\\bubbles1.txt"
+Finished processing file: "./data/cmu_processed\\bubbles1.txt"; CETSP algorithm run in 14 ms, distance=349.335
+Processing file: "./data/cmu_processed\\bubbles2.txt"
+Finished processing file: "./data/cmu_processed\\bubbles2.txt"; CETSP algorithm run in 25 ms, distance=429.215
+Processing file: "./data/cmu_processed\\bubbles3.txt"
+Finished processing file: "./data/cmu_processed\\bubbles3.txt"; CETSP algorithm run in 51 ms, distance=532.998
+Processing file: "./data/cmu_processed\\bubbles4.txt"
+Finished processing file: "./data/cmu_processed\\bubbles4.txt"; CETSP algorithm run in 77 ms, distance=815.86
+Processing file: "./data/cmu_processed\\bubbles5.txt"
+Finished processing file: "./data/cmu_processed\\bubbles5.txt"; CETSP algorithm run in 125 ms, distance=1094.07
+Processing file: "./data/cmu_processed\\bubbles6.txt"
+Finished processing file: "./data/cmu_processed\\bubbles6.txt"; CETSP algorithm run in 192 ms, distance=1354.46
+Processing file: "./data/cmu_processed\\bubbles7.txt"
+Finished processing file: "./data/cmu_processed\\bubbles7.txt"; CETSP algorithm run in 228 ms, distance=1666.13
+Processing file: "./data/cmu_processed\\bubbles8.txt"
+Finished processing file: "./data/cmu_processed\\bubbles8.txt"; CETSP algorithm run in 292 ms, distance=2025.07
+Processing file: "./data/cmu_processed\\bubbles9.txt"
+Finished processing file: "./data/cmu_processed\\bubbles9.txt"; CETSP algorithm run in 443 ms, distance=2389.01
+Processing file: "./data/cmu_processed\\chaoSingleDep.txt"
+Finished processing file: "./data/cmu_processed\\chaoSingleDep.txt"; CETSP algorithm run in 59 ms, distance=1046.38
+Processing file: "./data/cmu_processed\\concentricCircles1.txt"
+Finished processing file: "./data/cmu_processed\\concentricCircles1.txt"; CETSP algorithm run in 2 ms, distance=53.4055
+Processing file: "./data/cmu_processed\\concentricCircles2.txt"
+Finished processing file: "./data/cmu_processed\\concentricCircles2.txt"; CETSP algorithm run in 11 ms, distance=154.974
+Processing file: "./data/cmu_processed\\concentricCircles3.txt"
+Finished processing file: "./data/cmu_processed\\concentricCircles3.txt"; CETSP algorithm run in 23 ms, distance=272.301
+Processing file: "./data/cmu_processed\\concentricCircles4.txt"
+Finished processing file: "./data/cmu_processed\\concentricCircles4.txt"; CETSP algorithm run in 49 ms, distance=471.689
+Processing file: "./data/cmu_processed\\concentricCircles5.txt"
+Finished processing file: "./data/cmu_processed\\concentricCircles5.txt"; CETSP algorithm run in 82 ms, distance=653.024
+Processing file: "./data/cmu_processed\\d493rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\d493rdmRad.txt"; CETSP algorithm run in 33 ms, distance=134.668
+Processing file: "./data/cmu_processed\\d493_or10.txt"
+Finished processing file: "./data/cmu_processed\\d493_or10.txt"; CETSP algorithm run in 140 ms, distance=101.223
+Processing file: "./data/cmu_processed\\d493_or2.txt"
+Finished processing file: "./data/cmu_processed\\d493_or2.txt"; CETSP algorithm run in 267 ms, distance=201.983
+Processing file: "./data/cmu_processed\\d493_or30.txt"
+Finished processing file: "./data/cmu_processed\\d493_or30.txt"; CETSP algorithm run in 189 ms, distance=69.844
+Processing file: "./data/cmu_processed\\dsj1000rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\dsj1000rdmRad.txt"; CETSP algorithm run in 89 ms, distance=626.267
+Processing file: "./data/cmu_processed\\dsj1000_or10.txt"
+Finished processing file: "./data/cmu_processed\\dsj1000_or10.txt"; CETSP algorithm run in 240 ms, distance=377.851
+Processing file: "./data/cmu_processed\\dsj1000_or2.txt"
+Finished processing file: "./data/cmu_processed\\dsj1000_or2.txt"; CETSP algorithm run in 597 ms, distance=933.448
+Processing file: "./data/cmu_processed\\dsj1000_or30.txt"
+Finished processing file: "./data/cmu_processed\\dsj1000_or30.txt"; CETSP algorithm run in 239 ms, distance=201.232
+Processing file: "./data/cmu_processed\\kroD100rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\kroD100rdmRad.txt"; CETSP algorithm run in 30 ms, distance=142.337
+Processing file: "./data/cmu_processed\\kroD100_or10.txt"
+Finished processing file: "./data/cmu_processed\\kroD100_or10.txt"; CETSP algorithm run in 20 ms, distance=90.1267
+Processing file: "./data/cmu_processed\\kroD100_or2.txt"
+Finished processing file: "./data/cmu_processed\\kroD100_or2.txt"; CETSP algorithm run in 38 ms, distance=159.864
+Processing file: "./data/cmu_processed\\kroD100_or30.txt"
+Finished processing file: "./data/cmu_processed\\kroD100_or30.txt"; CETSP algorithm run in 9 ms, distance=58.6933
+Processing file: "./data/cmu_processed\\lin318rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\lin318rdmRad.txt"; CETSP algorithm run in 47 ms, distance=2073.64
+Processing file: "./data/cmu_processed\\lin318_or10.txt"
+Finished processing file: "./data/cmu_processed\\lin318_or10.txt"; CETSP algorithm run in 94 ms, distance=1408.96
+Processing file: "./data/cmu_processed\\lin318_or2.txt"
+Finished processing file: "./data/cmu_processed\\lin318_or2.txt"; CETSP algorithm run in 199 ms, distance=2842.08
+Processing file: "./data/cmu_processed\\lin318_or30.txt"
+Finished processing file: "./data/cmu_processed\\lin318_or30.txt"; CETSP algorithm run in 59 ms, distance=767.002
+Processing file: "./data/cmu_processed\\nlpProb0.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb0.txt"; CETSP algorithm run in 0 ms, distance=9.68134
+Processing file: "./data/cmu_processed\\nlpProb0rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb0rdmRad.txt"; CETSP algorithm run in 0 ms, distance=16.162
+Processing file: "./data/cmu_processed\\nlpProb1.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb1.txt"; CETSP algorithm run in 0 ms, distance=0
+Processing file: "./data/cmu_processed\\nlpProb10.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb10.txt"; CETSP algorithm run in 3 ms, distance=37.5772
+Processing file: "./data/cmu_processed\\nlpProb10rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb10rdmRad.txt"; CETSP algorithm run in 3 ms, distance=37.4658
+Processing file: "./data/cmu_processed\\nlpProb11.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb11.txt"; CETSP algorithm run in 0 ms, distance=73.5901
+Processing file: "./data/cmu_processed\\nlpProb11rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb11rdmRad.txt"; CETSP algorithm run in 0 ms, distance=65.5776
+Processing file: "./data/cmu_processed\\nlpProb12.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb12.txt"; CETSP algorithm run in 0 ms, distance=55.1674
+Processing file: "./data/cmu_processed\\nlpProb12rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb12rdmRad.txt"; CETSP algorithm run in 0 ms, distance=65.3347
+Processing file: "./data/cmu_processed\\nlpProb12_1.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb12_1.txt"; CETSP algorithm run in 0 ms, distance=0
+Processing file: "./data/cmu_processed\\nlpProb12_1rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb12_1rdmRad.txt"; CETSP algorithm run in 0 ms, distance=2
+Processing file: "./data/cmu_processed\\nlpProb13.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb13.txt"; CETSP algorithm run in 5 ms, distance=42.615
+Processing file: "./data/cmu_processed\\nlpProb13rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb13rdmRad.txt"; CETSP algorithm run in 5 ms, distance=50.5175
+Processing file: "./data/cmu_processed\\nlpProb1rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb1rdmRad.txt"; CETSP algorithm run in 0 ms, distance=1.2159
+Processing file: "./data/cmu_processed\\nlpProb2.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb2.txt"; CETSP algorithm run in 0 ms, distance=2
+Processing file: "./data/cmu_processed\\nlpProb2rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb2rdmRad.txt"; CETSP algorithm run in 0 ms, distance=3.954
+Processing file: "./data/cmu_processed\\nlpProb3.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb3.txt"; CETSP algorithm run in 0 ms, distance=18.2911
+Processing file: "./data/cmu_processed\\nlpProb3rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb3rdmRad.txt"; CETSP algorithm run in 0 ms, distance=3.26798
+Processing file: "./data/cmu_processed\\nlpProb4.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb4.txt"; CETSP algorithm run in 0 ms, distance=18.0945
+Processing file: "./data/cmu_processed\\nlpProb4rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb4rdmRad.txt"; CETSP algorithm run in 0 ms, distance=5.0701
+Processing file: "./data/cmu_processed\\nlpProb5.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb5.txt"; CETSP algorithm run in 0 ms, distance=29.7315
+Processing file: "./data/cmu_processed\\nlpProb5rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb5rdmRad.txt"; CETSP algorithm run in 0 ms, distance=31.547
+Processing file: "./data/cmu_processed\\nlpProb6.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb6.txt"; CETSP algorithm run in 0 ms, distance=13.1138
+Processing file: "./data/cmu_processed\\nlpProb6rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb6rdmRad.txt"; CETSP algorithm run in 0 ms, distance=13.6204
+Processing file: "./data/cmu_processed\\nlpProb7.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb7.txt"; CETSP algorithm run in 0 ms, distance=10.7192
+Processing file: "./data/cmu_processed\\nlpProb7rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb7rdmRad.txt"; CETSP algorithm run in 0 ms, distance=10.5201
+Processing file: "./data/cmu_processed\\nlpProb8.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb8.txt"; CETSP algorithm run in 0 ms, distance=52.9607
+Processing file: "./data/cmu_processed\\nlpProb8rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb8rdmRad.txt"; CETSP algorithm run in 0 ms, distance=52.959
+Processing file: "./data/cmu_processed\\nlpProb9.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb9.txt"; CETSP algorithm run in 0 ms, distance=53.7034
+Processing file: "./data/cmu_processed\\nlpProb9rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\nlpProb9rdmRad.txt"; CETSP algorithm run in 0 ms, distance=52.5337
+Processing file: "./data/cmu_processed\\pcb442rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\pcb442rdmRad.txt"; CETSP algorithm run in 82 ms, distance=221.931
+Processing file: "./data/cmu_processed\\pcb442_or10.txt"
+Finished processing file: "./data/cmu_processed\\pcb442_or10.txt"; CETSP algorithm run in 105 ms, distance=143.694
+Processing file: "./data/cmu_processed\\pcb442_or2.txt"
+Finished processing file: "./data/cmu_processed\\pcb442_or2.txt"; CETSP algorithm run in 302 ms, distance=337.954
+Processing file: "./data/cmu_processed\\pcb442_or30.txt"
+Finished processing file: "./data/cmu_processed\\pcb442_or30.txt"; CETSP algorithm run in 73 ms, distance=83.6855
+Processing file: "./data/cmu_processed\\rat195rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\rat195rdmRad.txt"; CETSP algorithm run in 9 ms, distance=68.3093
+Processing file: "./data/cmu_processed\\rat195_or10.txt"
+Finished processing file: "./data/cmu_processed\\rat195_or10.txt"; CETSP algorithm run in 50 ms, distance=68.1548
+Processing file: "./data/cmu_processed\\rat195_or2.txt"
+Finished processing file: "./data/cmu_processed\\rat195_or2.txt"; CETSP algorithm run in 122 ms, distance=164.086
+Processing file: "./data/cmu_processed\\rat195_or30.txt"
+Finished processing file: "./data/cmu_processed\\rat195_or30.txt"; CETSP algorithm run in 22 ms, distance=45.76
+Processing file: "./data/cmu_processed\\rd400rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\rd400rdmRad.txt"; CETSP algorithm run in 287 ms, distance=1286.35
+Processing file: "./data/cmu_processed\\rd400_or10.txt"
+Finished processing file: "./data/cmu_processed\\rd400_or10.txt"; CETSP algorithm run in 133 ms, distance=459.481
+Processing file: "./data/cmu_processed\\rd400_or2.txt"
+Finished processing file: "./data/cmu_processed\\rd400_or2.txt"; CETSP algorithm run in 273 ms, distance=1048.63
+Processing file: "./data/cmu_processed\\rd400_or30.txt"
+Finished processing file: "./data/cmu_processed\\rd400_or30.txt"; CETSP algorithm run in 55 ms, distance=225.947
+Processing file: "./data/cmu_processed\\rotatingDiamonds1.txt"
+Finished processing file: "./data/cmu_processed\\rotatingDiamonds1.txt"; CETSP algorithm run in 3 ms, distance=32.4345
+Processing file: "./data/cmu_processed\\rotatingDiamonds2.txt"
+Finished processing file: "./data/cmu_processed\\rotatingDiamonds2.txt"; CETSP algorithm run in 26 ms, distance=140.766
+Processing file: "./data/cmu_processed\\rotatingDiamonds3.txt"
+Finished processing file: "./data/cmu_processed\\rotatingDiamonds3.txt"; CETSP algorithm run in 114 ms, distance=381.823
+Processing file: "./data/cmu_processed\\rotatingDiamonds4.txt"
+Finished processing file: "./data/cmu_processed\\rotatingDiamonds4.txt"; CETSP algorithm run in 229 ms, distance=814.162
+Processing file: "./data/cmu_processed\\rotatingDiamonds5.txt"
+Finished processing file: "./data/cmu_processed\\rotatingDiamonds5.txt"; CETSP algorithm run in 558 ms, distance=1580.71
+Processing file: "./data/cmu_processed\\team1_100.txt"
+Finished processing file: "./data/cmu_processed\\team1_100.txt"; CETSP algorithm run in 21 ms, distance=309.437
+Processing file: "./data/cmu_processed\\team1_100rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\team1_100rdmRad.txt"; CETSP algorithm run in 14 ms, distance=399.332
+Processing file: "./data/cmu_processed\\team2_200.txt"
+Finished processing file: "./data/cmu_processed\\team2_200.txt"; CETSP algorithm run in 35 ms, distance=248.418
+Processing file: "./data/cmu_processed\\team2_200rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\team2_200rdmRad.txt"; CETSP algorithm run in 71 ms, distance=627.21
+Processing file: "./data/cmu_processed\\team3_300.txt"
+Finished processing file: "./data/cmu_processed\\team3_300.txt"; CETSP algorithm run in 110 ms, distance=464.324
+Processing file: "./data/cmu_processed\\team3_300rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\team3_300rdmRad.txt"; CETSP algorithm run in 17 ms, distance=379.215
+Processing file: "./data/cmu_processed\\team4_400.txt"
+Finished processing file: "./data/cmu_processed\\team4_400.txt"; CETSP algorithm run in 179 ms, distance=683.542
+Processing file: "./data/cmu_processed\\team4_400rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\team4_400rdmRad.txt"; CETSP algorithm run in 289 ms, distance=1011.25
+Processing file: "./data/cmu_processed\\team5_499.txt"
+Finished processing file: "./data/cmu_processed\\team5_499.txt"; CETSP algorithm run in 293 ms, distance=709.024
+Processing file: "./data/cmu_processed\\team5_499rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\team5_499rdmRad.txt"; CETSP algorithm run in 32 ms, distance=446.742
+Processing file: "./data/cmu_processed\\team6_500.txt"
+Finished processing file: "./data/cmu_processed\\team6_500.txt"; CETSP algorithm run in 112 ms, distance=226.245
+Processing file: "./data/cmu_processed\\team6_500rdmRad.txt"
+Finished processing file: "./data/cmu_processed\\team6_500rdmRad.txt"; CETSP algorithm run in 96 ms, distance=636.041
+Processing file: "./data/cmu_processed\\usa13509.txt"
+Finished processing file: "./data/cmu_processed\\usa13509.txt"; CETSP algorithm run in 13118 ms, distance=1.04682e+07

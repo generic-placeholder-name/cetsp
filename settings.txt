@@ -1,4 +1,4 @@
-numRepeats 1
-inputDir ./data/timing/timing_structured_input
-outputDir ./data/timing/timing_structured_output
-logFile ./data/timing/timing_structured_log.txt
+numRepeats 10
+inputDir ./data/cmu_processed
+outputDir ./data/timing/timing_cmu_output
+logFile ./data/timing/timing_cmu_log.txt
