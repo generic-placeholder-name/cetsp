@@ -9,3 +9,6 @@ build/
 
 # Ignore everything in the paper/ directory
 paper/*
+
+# Ignore zip files
+*.zip
