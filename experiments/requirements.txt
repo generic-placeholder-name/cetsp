@@ -1,0 +1,4 @@
+# Experiment analysis and data visualization
+matplotlib
+numpy
+scipy

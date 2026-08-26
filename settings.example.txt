@@ -1,0 +1,4 @@
+numRepeats 10
+inputDir ./data/mennell/instances
+outputDir ./output/tours
+logFile ./output/cetsp.log

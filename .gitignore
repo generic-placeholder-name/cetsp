@@ -1,14 +1,38 @@
-# VSCode settings
+# Editor settings
 .vscode/
 
-# Python virtual environment
+# Python environments and caches
 .venv/
+__pycache__/
+*.py[cod]
 
 # Build directory
 build/
+/build-*/
 
-# Ignore everything in the paper/ directory
-paper/*
+# Local runs and configuration
+/output/
+/settings.txt
+
+# LaTeX build output
+paper/*.abs
+paper/*.aux
+paper/*.bbl
+paper/*.bcf
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.run.xml
+paper/*.synctex.gz
+paper/thumbnails/
+
+# Deprecated paper version and generated figure intermediates
+paper/els_paper.*
+paper/els_references.bib
+paper/img/code/*_save_dir/
+paper/img/merge_frames/*_pair.png
 
 # Ignore zip files
 *.zip

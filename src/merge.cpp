@@ -1,17 +1,60 @@
 #include "merge.hpp"
+
+#include "circle_geometry.hpp"
 #include "debug.hpp"
+#include "hash_set.hpp"
+
+#include <boost/container/small_vector.hpp>
+#include <boost/geometry.hpp>
+#include <boost/geometry/index/rtree.hpp>
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <iostream>
+#include <iterator>
 #include <limits>
+#include <numbers>
 #include <numeric>
+#include <optional>
 #include <random>
 #include <set>
+#include <stdexcept>
+#include <string>
+#include <utility>
 #include <vector>
+
+namespace bg = boost::geometry;
+namespace bgi = boost::geometry::index;
+
+namespace {
+
+using CircleId = std::size_t;
+using BoxValue = std::pair<Box, CircleId>;
+using HeapEntry = std::pair<double, CircleId>;
+
+template<std::size_t Capacity>
+using BoxValues = boost::container::small_vector<BoxValue, Capacity>;
+
+constexpr CircleId noNeighbor = std::numeric_limits<CircleId>::max();
+
+std::string formatNeighbor(CircleId id) {
+    return id == noNeighbor ? "<none>" : std::to_string(id);
+}
+
+struct ActiveCircle {
+    Circle circle;
+    CircleId nearestNeighbor = noNeighbor;
+    HashSet<CircleId> reverseNeighbors;
+
+    explicit ActiveCircle(Circle value) : circle(std::move(value)) {}
+};
+
+} // namespace
 
 void removeCoveringCircles(std::vector<Circle>& circles) {
     size_t n = circles.size();
+
     std::vector<size_t> order(n);
     std::iota(order.begin(), order.end(), 0);
     std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
@@ -22,11 +65,11 @@ void removeCoveringCircles(std::vector<Circle>& circles) {
     std::vector<bool> removed(n, false);
     for (size_t id : order) {
         if (removed[id]) continue;
-        std::vector<BoxValue> candidates;
+        BoxValues<16> candidates;
         rtree_pr.query(bgi::covers(circles[id].center), std::back_inserter(candidates));
         for (auto& v : candidates) {
             Circle& cj = circles[v.second];
-            if (bg::distance(cj.center, circles[id].center) + circles[id].r < cj.r) {
+            if (bg::distance(cj.center, circles[id].center) + circles[id].r <= cj.r) {
                 removed[v.second] = true;
                 rtree_pr.remove(std::make_pair(circleBox(cj), v.second));
             }
@@ -37,217 +80,271 @@ void removeCoveringCircles(std::vector<Circle>& circles) {
     // Filter out removed circles
     std::vector<Circle> tmp;
     tmp.reserve(n);
-    for (auto& c : circles) {
-        if (!removed[c.nodeId]) tmp.push_back(c);
+    for (size_t i = 0; i < circles.size(); ++i) {
+        if (!removed[i]) tmp.push_back(std::move(circles[i]));
     }
     circles = std::move(tmp);
 
-    // Reset the node IDs
-    for (size_t i = 0; i < circles.size(); ++i) {
-        circles[i].nodeId = i;
-    }
-
     DBG("Done removing");
     DBG("Remaining circles: " << circles.size());
-    for (const auto& c : circles) {
-        DBG("Circle ID: " << c.nodeId 
+    for (size_t i = 0; i < circles.size(); ++i) {
+        const Circle& c = circles[i];
+        DBG("Circle ID: " << i
             << ", Center: (" << bg::get<0>(c.center) << ", " << bg::get<1>(c.center) << ")"
             << ", Radius: " << c.r);
     }
 }
 
-std::vector<TreeNode> buildMergeTree(std::vector<Circle> circles) {
+std::vector<TreeNode> buildMergeTree(
+    const std::vector<Circle>& circles,
+    std::mt19937_64& randomEngine) {
     size_t n = circles.size();
 
-    // Generate a random angle theta for rotation
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 2 * std::numbers::pi);
-    double theta = dis(gen);
+    if (circles.empty()) {
+        return {};
+    }
 
-    // Rotate all points by theta
-    auto rotatePoint = [&](Point& p, double angle) {
+    if (circles.size() == 1) {
+        return {TreeNode::leaf(circles.front().center, circles.front().r)};
+    }
+
+    std::vector<ActiveCircle> activeCircles;
+    activeCircles.reserve(2 * n - 1);
+    for (const Circle& circle : circles) {
+        activeCircles.emplace_back(circle);
+    }
+
+    // Generate a random angle theta for rotation
+    std::uniform_real_distribution<> dis(0.0, 2 * std::numbers::pi);
+    double theta = dis(randomEngine);
+
+    const double cosine = std::cos(theta);
+    const double sine = std::sin(theta);
+
+    auto rotatePoint = [](Point& p, double cosAngle, double sinAngle) {
         double x = bg::get<0>(p);
         double y = bg::get<1>(p);
-        bg::set<0>(p, x * std::cos(angle) - y * std::sin(angle));
-        bg::set<1>(p, x * std::sin(angle) + y * std::cos(angle));
+        bg::set<0>(p, x * cosAngle - y * sinAngle);
+        bg::set<1>(p, x * sinAngle + y * cosAngle);
     };
 
-    for (auto& c : circles) {
-        rotatePoint(c.center, theta);
+    for (auto& active : activeCircles) {
+        rotatePoint(active.circle.center, cosine, sine);
     }
 
     // Initialize combination-tree nodes for leaves
     std::vector<TreeNode> treeNodes;
     treeNodes.reserve(2 * n);
-    for (size_t i = 0; i < circles.size(); ++i) {
-        treeNodes.emplace_back(static_cast<size_t>(-1), static_cast<size_t>(-1), 0.0, circles[i].center, circles[i].r);
+    for (size_t i = 0; i < n; ++i) {
+        const Circle& circle = activeCircles[i].circle;
+        treeNodes.push_back(TreeNode::leaf(circle.center, circle.r));
     }
-    size_t nextNodeId = n;
 
     // Build R*-tree for merge-phase nearest-neighbor queries
     bgi::rtree<BoxValue, bgi::rstar<16>> rtree_kd;
-    for (auto& c : circles) {
-        rtree_kd.insert(std::make_pair(circleBox(c), c.nodeId));
+    for (size_t id = 0; id < n; ++id) {
+        rtree_kd.insert({circleBox(activeCircles[id].circle), id});
     }
 
-    // 2) Dynamic NN maintenance: each circle stores its nn and gap, and we keep a global min-heap
-    std::set<std::pair<double, size_t>> heap;
-    std::vector<std::pair<double, size_t>> handles(2 * n, {-1, -1});
-    for (auto& c : circles) {
-        // Find nearest neighbor via two-NN query
+    // 2) Dynamic NN maintenance: each active circle stores its nearest
+    // neighbor and reverse links, while the heap stores the corresponding gap.
+    std::set<HeapEntry> heap;
+    // An engaged entry records the current heap key for that circle. A
+    // disengaged entry means any matching key still in the heap is stale.
+    std::vector<std::optional<double>> currentHeapGap(2 * n);
+    for (size_t id = 0; id < n; ++id) {
+        ActiveCircle& active = activeCircles[id];
+        const Circle& circle = active.circle;
+
+        // Find nearest neighbor via a bounded R-tree query.
         constexpr int K = 16;
-        std::vector<BoxValue> res;
-        rtree_kd.query(bgi::nearest(c.center, K), std::back_inserter(res));
-        size_t nn = static_cast<size_t>(-1);
+        BoxValues<16> res;
+        rtree_kd.query(bgi::nearest(circle.center, K), std::back_inserter(res));
+        CircleId nearestNeighbor = noNeighbor;
         double best = std::numeric_limits<double>::infinity();
         for (auto& v : res) {
             size_t j = v.second;
-            if (j == c.nodeId) continue;
-            Circle& cj = circles[j];
-            double d = gapDist(c.center, cj.center, c.r, cj.r);
+            if (j == id) continue;
+            const Circle& candidate = activeCircles[j].circle;
+            double d = gapDist(
+                circle.center, candidate.center, circle.r, candidate.r);
             if (d < best) {
                 best = d;
-                nn = j;
+                nearestNeighbor = j;
             }
         }
-        c.nn = nn;
-        c.gap = best;
-        auto it = heap.insert({best, c.nodeId}).first;
-        handles[c.nodeId] = *it;
-        circles[nn].rev.insert(c.nodeId);
+        active.nearestNeighbor = nearestNeighbor;
+        if (nearestNeighbor == noNeighbor) {
+            throw std::logic_error("failed to find a nearest neighbor while building merge tree");
+        }
+        heap.insert({best, id});
+        currentHeapGap[id] = best;
+        activeCircles[nearestNeighbor].reverseNeighbors.insert(id);
     }
 
     DBG("Done initializing NNs");
     DBG("Nearest neighbors of each node:");
-    for (const auto& c : circles) {
-        DBG("Node " << c.nodeId << " -> NN: " << c.nn 
-                  << " (gap: " << c.gap << ")");
+    for (size_t id = 0; id < n; ++id) {
+        DBG("Node " << id
+            << " -> NN: " << activeCircles[id].nearestNeighbor
+            << " (gap: " << *currentHeapGap[id] << ")");
     }
 
     size_t mergeCount = 0;
     // Combine loop
     for (size_t itr = 0; itr < n - 1; ++itr) {
         // Extract global minimum gap circle
-        size_t id1;
+        CircleId id1;
         double bestDist;
         do {
+            if (heap.empty()) {
+                throw std::logic_error(
+                    "merge queue became empty before the merge tree was complete");
+            }
             auto it = heap.begin();
             bestDist = it->first;
             id1 = it->second;
             heap.erase(it);
-        } while (handles[id1].second == static_cast<size_t>(-1));
-        Circle& c1 = circles[id1];
-        size_t id2 = c1.nn;
-        Circle& c2 = circles[id2];
+        } while (!currentHeapGap[id1] || *currentHeapGap[id1] != bestDist);
+        currentHeapGap[id1].reset();
+
+        ActiveCircle& first = activeCircles[id1];
+        if (first.nearestNeighbor == noNeighbor) {
+            throw std::logic_error(
+                "active merge circle has no nearest neighbor");
+        }
+        CircleId id2 = first.nearestNeighbor;
+        if (id2 >= activeCircles.size() || !currentHeapGap[id2]) {
+            throw std::logic_error(
+                "selected nearest neighbor is not active");
+        }
+        ActiveCircle& second = activeCircles[id2];
 
         // Capture reverse-neighbor lists
-        auto revs = c1.rev;
-        revs.insert(c2.rev.begin(), c2.rev.end());
-        revs.erase(id1); // remove self-reference
-        revs.erase(id2); // remove self-reference
+        auto reverseNeighbors = first.reverseNeighbors;
+        reverseNeighbors.insert(
+            second.reverseNeighbors.begin(), second.reverseNeighbors.end());
+        reverseNeighbors.erase(id1); // remove self-reference
+        reverseNeighbors.erase(id2); // remove self-reference
 
-        size_t newId = nextNodeId++;
+        CircleId newId = activeCircles.size();
         ++mergeCount;
         DBG("Merge #" << mergeCount
               << ": " << id1 << " + " << id2
               << " (gap=" << bestDist << ") -> newId=" << newId);
 
         // Build combined circle
-        Circle newC;
-        auto combined = makeCombinedCircle(c1.center, c1.r, c2.center, c2.r);
-        newC.center = combined.first;
-        newC.r = combined.second;
-        newC.nodeId = newId;
-        newC.nn = static_cast<size_t>(-1);
-        newC.gap = 0.0;
-        newC.rev.clear();
+        const Circle& firstCircle = first.circle;
+        const Circle& secondCircle = second.circle;
+        auto combined =
+            makeCombinedCircle(
+                firstCircle.center, firstCircle.r,
+                secondCircle.center, secondCircle.r,
+                randomEngine);
+        Circle newCircle{combined.first, combined.second};
 
-        treeNodes.emplace_back(id1, id2, bestDist, newC.center, newC.r);
+        treeNodes.push_back(TreeNode::branch(
+            id1, id2, bestDist, newCircle.center, newCircle.r));
 
         // Remove old circles from tree & data structures
-        handles[id1] = {-1, static_cast<size_t>(-1)};
-        handles[id2] = {-1, static_cast<size_t>(-1)};
-        circles[c2.nn].rev.erase(id2); // remove reverse link
-        rtree_kd.remove(std::make_pair(circleBox(c1), id1));
-        rtree_kd.remove(std::make_pair(circleBox(c2), id2));
+        currentHeapGap[id2].reset();
+        if (second.nearestNeighbor == noNeighbor ||
+            second.nearestNeighbor >= activeCircles.size()) {
+            throw std::logic_error(
+                "selected merge circle has no active nearest neighbor");
+        }
+        activeCircles[second.nearestNeighbor].reverseNeighbors.erase(id2);
+        rtree_kd.remove({circleBox(firstCircle), id1});
+        rtree_kd.remove({circleBox(secondCircle), id2});
         DBG("Removed old circles");
 
         // Insert combined circle
-        circles.push_back(newC);
-        rtree_kd.insert(std::make_pair(circleBox(newC), newId));
+        activeCircles.emplace_back(newCircle);
+        rtree_kd.insert({circleBox(newCircle), newId});
 
         // Compute NN for new circle
-        std::vector<BoxValue> resn;
-        rtree_kd.query(bgi::nearest(newC.center, 2),
+        BoxValues<2> resn;
+        rtree_kd.query(bgi::nearest(newCircle.center, 2),
                         std::back_inserter(resn));
-        size_t nn3 = static_cast<size_t>(-1);
+        CircleId nn3 = noNeighbor;
         double b3 = std::numeric_limits<double>::infinity();
         for (auto& v : resn) {
             size_t j = v.second;
             if (j == newId) continue;
-            Circle& cj = circles[j];
-            double d3 = gapDist(newC.center,
-                                cj.center,
-                                newC.r,
-                                cj.r);
+            const Circle& candidate = activeCircles[j].circle;
+            double d3 = gapDist(
+                newCircle.center, candidate.center,
+                newCircle.r, candidate.r);
             if (d3 < b3) {
                 b3 = d3;
                 nn3 = j;
             }
         }
-        circles[newId].nn = nn3;
-        circles[newId].gap = b3;
-        auto it3 = heap.insert({b3, newId}).first;
-        handles[newId] = *it3;
-        if (nn3 != static_cast<size_t>(-1)) {
-            circles[nn3].rev.insert(newId);
+        activeCircles[newId].nearestNeighbor = nn3;
+        if (nn3 == noNeighbor && itr != n - 2) {
+            throw std::logic_error(
+                "merged circle has no neighbor before the final merge");
+        }
+        if (nn3 != noNeighbor) {
+            heap.insert({b3, newId});
+            currentHeapGap[newId] = b3;
+            activeCircles[nn3].reverseNeighbors.insert(newId);
         }
         DBG("  New circle " << newId
-            << " nn=" << nn3
+            << " nn=" << formatNeighbor(nn3)
             << " gap=" << b3);
 
         // Recompute NN for circles that pointed to id1 or id2
-        auto recompute = [&](size_t cid) {
-            if (cid == static_cast<size_t>(-1)) return;
-            heap.erase(handles[cid]);
-            handles[cid] = {-1, static_cast<size_t>(-1)};
+        auto recompute = [&](CircleId cid) {
+            if (cid >= activeCircles.size() || !currentHeapGap[cid]) {
+                throw std::logic_error(
+                    "reverse-neighbor link does not name an active circle");
+            }
+            const std::size_t erased =
+                heap.erase({*currentHeapGap[cid], cid});
+            if (erased != 1) {
+                throw std::logic_error(
+                    "active circle's heap entry could not be removed");
+            }
+            currentHeapGap[cid].reset();
 
-            std::vector<BoxValue> resc;
-            rtree_kd.query(bgi::nearest(circles[cid].center, 2),
+            ActiveCircle& active = activeCircles[cid];
+            const Circle& circle = active.circle;
+            BoxValues<2> resc;
+            rtree_kd.query(bgi::nearest(circle.center, 2),
                            std::back_inserter(resc));
-            size_t nn2 = static_cast<size_t>(-1);
+            CircleId nn2 = noNeighbor;
             double b2 = std::numeric_limits<double>::infinity();
             for (auto& v : resc) {
                 size_t j = v.second;
                 if (j == cid) continue;
-                Circle& cj = circles[j];
-                double d2 = gapDist(circles[cid].center,
-                                    cj.center,
-                                    circles[cid].r,
-                                    cj.r);
+                const Circle& candidate = activeCircles[j].circle;
+                double d2 = gapDist(
+                    circle.center, candidate.center,
+                    circle.r, candidate.r);
                 if (d2 < b2) {
                     b2 = d2;
                     nn2 = j;
                 }
             }
-            circles[cid].nn = nn2;
-            circles[cid].gap = b2;
-            auto it2 = heap.insert({b2, cid}).first;
-            handles[cid] = *it2;
-            if (nn2 != static_cast<size_t>(-1)) {
-                circles[nn2].rev.insert(cid);
+            if (nn2 == noNeighbor) {
+                throw std::logic_error(
+                    "failed to recompute an active circle's nearest neighbor");
             }
+            active.nearestNeighbor = nn2;
+            heap.insert({b2, cid});
+            currentHeapGap[cid] = b2;
+            activeCircles[nn2].reverseNeighbors.insert(cid);
             DBG("  Update NN for circle " << cid
-                << " -> nn=" << nn2
+                << " -> nn=" << formatNeighbor(nn2)
                 << " gap=" << b2);
         };
-        for (size_t cid : revs) recompute(cid);
+        for (CircleId cid : reverseNeighbors) recompute(cid);
     }
 
     // Rotate all TreeNode points back by -theta
     for (auto& node : treeNodes) {
-        rotatePoint(node.center, -theta);
+        rotatePoint(node.center, cosine, -sine);
     }
 
     DBG("Combine complete. Total tree nodes=" << treeNodes.size());

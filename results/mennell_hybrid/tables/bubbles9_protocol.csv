@@ -1,0 +1,3 @@
+initializer,construction_runs,seed_file_tours,seeded_accepted,generated_accepted,seed_export_s,ma_initialization_s,best_generation,ma_time_to_best_s,end_to_initial_best_s,ma_total_s,ma_distance,ma_valid,final_socp_s,final_distance,final_valid
+heuristic_seeds,1000,20,20,0,6.153,4.38997,0,0.0,10.54297,421.747,2328.6776009926,true,0.355,2327.5536209981,true
+kmeans,0,0,0,20,0.0,13.0615,2709,1894.145439,13.0615,2241.37,2195.3718764579,true,0.460,2195.3718764443,true

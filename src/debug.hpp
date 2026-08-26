@@ -7,6 +7,8 @@
     #define DBG(x) do { std::cerr << x << std::endl; } while (0)
     #define DBG_NOENDL(x) do { std::cerr << x; } while (0)
 #else
-    #define DBG(x) do {} while (0)
-    #define DBG_NOENDL(x) do {} while (0)
+    // Keep expressions type-checked and variables visibly used while allowing
+    // the optimizer to discard all disabled logging.
+    #define DBG(x) do { if constexpr (false) { std::cerr << x << std::endl; } } while (0)
+    #define DBG_NOENDL(x) do { if constexpr (false) { std::cerr << x; } } while (0)
 #endif

@@ -1,4 +1,0 @@
-numRepeats 10
-inputDir ./data/cmu_processed
-outputDir ./data/timing/timing_cmu_output
-logFile ./data/timing/timing_cmu_log.txt

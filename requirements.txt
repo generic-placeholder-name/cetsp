@@ -1,3 +1,0 @@
-# For python testing code
-matplotlib
-numpy
