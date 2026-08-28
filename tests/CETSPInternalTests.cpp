@@ -3,6 +3,7 @@
 #include "circle_geometry.hpp"
 #include "merge.hpp"
 #include "reconstruct.hpp"
+#include "tour.hpp"
 
 #include <boost/geometry/algorithms/distance.hpp>
 #include <boost/geometry/algorithms/equals.hpp>
@@ -12,6 +13,7 @@
 #include <cstddef>
 #include <iostream>
 #include <random>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -150,6 +152,73 @@ void testReconstructionReinsertionCascade() {
                "a reinsertion cascade preserves the expected cyclic tour");
 }
 
+void testTourStructuralMaintenance() {
+    Tour tour(3);
+    expect(tour.empty(), "a new tour is empty");
+
+    const TourNodeHandle first = tour.createFirstVisit(
+        Point{0.0, 0.0}, 0, 3);
+    tour.addAssignment(first, 1, 3);
+    expect(tour.size() == 1,
+           "multiple tree-node assignments can share one tour visit");
+    expect(tour.previous(first) == first && tour.next(first) == first,
+           "the first tour visit forms a singleton cycle");
+    expect(tour.visitFor(0) == first && tour.visitFor(1) == first,
+           "the assignment index resolves every shared tree node");
+
+    bool duplicateAssignmentRejected = false;
+    try {
+        tour.addAssignment(first, 1, 3);
+    } catch (const std::logic_error&) {
+        duplicateAssignmentRejected = true;
+    }
+    expect(duplicateAssignmentRejected,
+           "a tree node cannot be assigned to the tour twice");
+
+    bool invalidTreeNodeRejected = false;
+    try {
+        tour.addAssignment(first, 3, 3);
+    } catch (const std::out_of_range&) {
+        invalidTreeNodeRejected = true;
+    }
+    expect(invalidTreeNodeRejected,
+           "assignment IDs must belong to the tour's merge tree");
+
+    const TourNodeHandle second = tour.insertVisitBetween(
+        Point{10.0, 0.0}, 2, first, first, 3);
+    expect(tour.size() == 2, "inserting on the singleton edge grows the tour");
+    expect(tour.next(first) == second && tour.previous(first) == second &&
+               tour.next(second) == first && tour.previous(second) == first,
+           "insertion updates both directions of the cyclic topology");
+    tour.assertValid();
+
+    tour.removeAssignment(0);
+    expect(tour.size() == 2 && !tour.visitFor(0) &&
+               tour.visitFor(1) == first,
+           "removing one shared assignment retains its tour visit");
+
+    const auto erasedAssignments = tour.eraseVisit(first);
+    expect(erasedAssignments.size() == 1 && erasedAssignments.front() == 1,
+           "erasing a visit returns and clears its remaining assignments");
+    expect(tour.size() == 1 && !tour.visitFor(1),
+           "erasing a visit updates the assignment index");
+    expect(tour.previous(second) == second && tour.next(second) == second,
+           "erasing from a two-visit tour restores a singleton cycle");
+
+    bool staleHandleRejected = false;
+    try {
+        static_cast<void>(tour.point(first));
+    } catch (const std::logic_error&) {
+        staleHandleRejected = true;
+    }
+    expect(staleHandleRejected,
+           "erased tour handles are rejected after their generation advances");
+
+    tour.removeAssignment(2);
+    expect(tour.empty(), "removing the final assignment empties the tour");
+    tour.assertValid();
+}
+
 void testCombinedCircleRadiusRange() {
     const Point firstCenter{0.0, 0.0};
     const Point secondCenter{1.1, 0.0};
@@ -206,6 +275,7 @@ int main() {
     testCoveringCircleReduction();
     testMergeStateIsInternal();
     testReconstructionReinsertionCascade();
+    testTourStructuralMaintenance();
     testCombinedCircleRadiusRange();
     testInternalBoundaryInputs();
 

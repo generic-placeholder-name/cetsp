@@ -78,6 +78,7 @@ add_library(cetsp_core STATIC
   src/solver.cpp
   src/circle_geometry.cpp
   src/merge.cpp
+  src/tour.cpp
   src/reconstruct.cpp
 )
 add_library(cetsp::core ALIAS cetsp_core)
@@ -179,13 +180,15 @@ if(CETSP_REQUESTED_SET_BACKEND STREQUAL "AUTO" OR
   endif()
 endif()
 
+# Tour stores IdSet directly, so consumers of its internal header must compile
+# with the same backend selection and, for Abseil, inherit its headers/libraries.
 if(CETSP_RESOLVED_SET_BACKEND STREQUAL "ABSEIL")
-  target_link_libraries(cetsp_core PRIVATE ${cetsp_abseil_targets})
-  target_compile_definitions(cetsp_core PRIVATE CETSP_HASH_SET_ABSEIL=1)
+  target_link_libraries(cetsp_core PUBLIC ${cetsp_abseil_targets})
+  target_compile_definitions(cetsp_core PUBLIC CETSP_HASH_SET_ABSEIL=1)
 elseif(CETSP_RESOLVED_SET_BACKEND STREQUAL "UNORDERED")
-  target_compile_definitions(cetsp_core PRIVATE CETSP_HASH_SET_UNORDERED=1)
+  target_compile_definitions(cetsp_core PUBLIC CETSP_HASH_SET_UNORDERED=1)
 elseif(CETSP_RESOLVED_SET_BACKEND STREQUAL "ORDERED")
-  target_compile_definitions(cetsp_core PRIVATE CETSP_HASH_SET_ORDERED=1)
+  target_compile_definitions(cetsp_core PUBLIC CETSP_HASH_SET_ORDERED=1)
 endif()
 
 if(DEBUG)
