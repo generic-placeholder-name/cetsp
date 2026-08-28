@@ -123,6 +123,33 @@ void testMergeStateIsInternal() {
            "a tree built from compacted survivors reconstructs a valid tour");
 }
 
+void testReconstructionReinsertionCascade() {
+    // Unmerging the root first creates leaf 0 and branch 3 as two tour nodes.
+    // Inserting branch 3 consumes two of leaf 0's three energy units. When
+    // branch 3 is unmerged, inserting leaf 1 consumes the last unit and forces
+    // leaf 0 through the explicit delete/reinsert work stack.
+    const std::vector<TreeNode> tree{
+        TreeNode::leaf(Point{0.0, 0.0}, 0.0),
+        TreeNode::leaf(Point{10.0, 0.0}, 0.0),
+        TreeNode::leaf(Point{20.0, 0.0}, 0.0),
+        TreeNode::branch(1, 2, 1.0, Point{15.0, 0.0}, 5.0),
+        TreeNode::branch(0, 3, 2.0, Point{10.0, 0.0}, 10.0),
+    };
+    const std::vector<Circle> leaves{
+        makeCircle(0.0, 0.0, 0.0),
+        makeCircle(10.0, 0.0, 0.0),
+        makeCircle(20.0, 0.0, 0.0),
+    };
+
+    const auto tour = reconstructTour(tree);
+    expect(tour.size() == leaves.size(),
+           "a reinsertion cascade retains one tour point per point neighborhood");
+    expect(verifyTour(tour, leaves),
+           "a reinsertion cascade preserves every leaf neighborhood");
+    expectNear(totalTourDistance(tour), 40.0, 1e-12,
+               "a reinsertion cascade preserves the expected cyclic tour");
+}
+
 void testCombinedCircleRadiusRange() {
     const Point firstCenter{0.0, 0.0};
     const Point secondCenter{1.1, 0.0};
@@ -178,6 +205,7 @@ void testInternalBoundaryInputs() {
 int main() {
     testCoveringCircleReduction();
     testMergeStateIsInternal();
+    testReconstructionReinsertionCascade();
     testCombinedCircleRadiusRange();
     testInternalBoundaryInputs();
 

@@ -9,7 +9,8 @@
 
 // ==================== Merge phase ====================
 
-// Remove circles that are completely covered by others.
+// Remove redundant circles that completely contain another circle. Any point
+// visiting the contained circle necessarily visits the containing circle too.
 // Mutates the vector but does not attach solver state to the remaining inputs.
 void removeCoveringCircles(std::vector<Circle>& circles);
 

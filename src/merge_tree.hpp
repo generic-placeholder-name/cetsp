@@ -14,7 +14,7 @@ using TreeNodeId = std::size_t;
 struct TreeNode {
     TreeNodeId left;
     TreeNodeId right;
-    double weight;
+    double mergeGap;
     Point center;
     double r;
 
@@ -25,11 +25,11 @@ struct TreeNode {
     [[nodiscard]] static TreeNode branch(
         TreeNodeId left,
         TreeNodeId right,
-        double weight,
+        double mergeGap,
         const Point& center,
         double radius) {
         assert(left != noChild && right != noChild);
-        return TreeNode(left, right, weight, center, radius);
+        return TreeNode(left, right, mergeGap, center, radius);
     }
 
     [[nodiscard]] bool isLeaf() const noexcept {
@@ -50,8 +50,8 @@ private:
     TreeNode(
         TreeNodeId left,
         TreeNodeId right,
-        double weight,
+        double mergeGap,
         const Point& center,
         double radius)
-        : left(left), right(right), weight(weight), center(center), r(radius) {}
+        : left(left), right(right), mergeGap(mergeGap), center(center), r(radius) {}
 };

@@ -3,7 +3,7 @@
 #if (defined(CETSP_HASH_SET_ABSEIL) + \
      defined(CETSP_HASH_SET_UNORDERED) + \
      defined(CETSP_HASH_SET_ORDERED)) != 1
-#error "Exactly one CETSP hash-set backend must be selected"
+#error "Exactly one CETSP set backend must be selected"
 #endif
 
 #if defined(CETSP_HASH_SET_ABSEIL)
@@ -15,12 +15,12 @@
 #endif
 
 #if defined(CETSP_HASH_SET_ABSEIL)
-template<typename T>
-using HashSet = absl::flat_hash_set<T>;
+template<typename Id>
+using IdSet = absl::flat_hash_set<Id>;
 #elif defined(CETSP_HASH_SET_UNORDERED)
-template<typename T>
-using HashSet = std::unordered_set<T>;
+template<typename Id>
+using IdSet = std::unordered_set<Id>;
 #elif defined(CETSP_HASH_SET_ORDERED)
-template<typename T>
-using HashSet = std::set<T>;
+template<typename Id>
+using IdSet = std::set<Id>;
 #endif
