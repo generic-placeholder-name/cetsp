@@ -1,12 +1,12 @@
 #include "reconstruct.hpp"
 
+#include "circle_geometry.hpp"
 #include "debug.hpp"
 #include "tour.hpp"
 
 #include <boost/geometry.hpp>
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <optional>
 #include <queue>
@@ -37,103 +37,6 @@ void sortByRadius(
 std::string formatHandle(TourNodeHandle handle) {
     return std::to_string(handle.slot) + ":" +
            std::to_string(handle.generation);
-}
-
-// Given a circle (center, radius) and an edge [p1,p2], returns the point
-// on or within the circle that minimizes insertion cost between p1 and p2.
-// Note: neither p1 nor p2 should be inside the circle.
-Point findOptimalPoint(
-    const Point& center,
-    double radius,
-    const Point& p1,
-    const Point& p2) {
-    const double EPS = 1e-12;
-
-    if (radius < EPS) {
-        return center;
-    }
-
-    {
-        double dx = bg::get<0>(p2) - bg::get<0>(p1);
-        double dy = bg::get<1>(p2) - bg::get<1>(p1);
-        double len2 = dx * dx + dy * dy;
-        if (len2 > EPS) {
-            double vx = bg::get<0>(center) - bg::get<0>(p1);
-            double vy = bg::get<1>(center) - bg::get<1>(p1);
-            double t = (dx * vx + dy * vy) / len2;
-            if (t >= 0.0 && t <= 1.0) {
-                Point projection{
-                    bg::get<0>(p1) + t * dx,
-                    bg::get<1>(p1) + t * dy};
-                if (bg::distance(projection, center) <= radius) {
-                    return projection;
-                }
-            }
-        }
-    }
-
-    double alpha = std::atan2(
-        bg::get<1>(p1) - bg::get<1>(center),
-        bg::get<0>(p1) - bg::get<0>(center));
-    double beta = std::atan2(
-        bg::get<1>(p2) - bg::get<1>(center),
-        bg::get<0>(p2) - bg::get<0>(center));
-    double ax = std::cos(alpha), ay = std::sin(alpha);
-    double bx = std::cos(beta), by = std::sin(beta);
-    double mx = ax + bx, my = ay + by;
-    double phi = std::atan2(my, mx);
-
-    auto f = [&](double angle) {
-        double x = bg::get<0>(center) + radius * std::cos(angle);
-        double y = bg::get<1>(center) + radius * std::sin(angle);
-        double tx = -std::sin(angle);
-        double ty = std::cos(angle);
-        double dot1 =
-            (bg::get<0>(p1) - x) * tx + (bg::get<1>(p1) - y) * ty;
-        double dot2 =
-            (bg::get<0>(p2) - x) * tx + (bg::get<1>(p2) - y) * ty;
-        return dot1 - dot2;
-    };
-
-    auto fprime = [&](double angle) {
-        double x = bg::get<0>(center) + radius * std::cos(angle);
-        double y = bg::get<1>(center) + radius * std::sin(angle);
-        double ux = bg::get<0>(p1) - x;
-        double uy = bg::get<1>(p1) - y;
-        double vx = bg::get<0>(p2) - x;
-        double vy = bg::get<1>(p2) - y;
-        double cosine = std::cos(angle);
-        double sine = std::sin(angle);
-        double first =
-            -(ux * cosine + uy * sine) +
-            radius * (ux * (-sine) + uy * cosine);
-        double second =
-            -(vx * cosine + vy * sine) +
-            radius * (vx * (-sine) + vy * cosine);
-        return first - second;
-    };
-
-    double value = f(phi);
-    double derivative = fprime(phi);
-    if (std::abs(derivative) > EPS) {
-        double newPhi = phi - value / derivative;
-        Point oldPoint{
-            bg::get<0>(center) + radius * std::cos(phi),
-            bg::get<1>(center) + radius * std::sin(phi)};
-        Point newPoint{
-            bg::get<0>(center) + radius * std::cos(newPhi),
-            bg::get<1>(center) + radius * std::sin(newPhi)};
-
-        if (bg::distance(p1, oldPoint) + bg::distance(p2, oldPoint) <
-            bg::distance(p1, newPoint) + bg::distance(p2, newPoint)) {
-            return oldPoint;
-        }
-        return newPoint;
-    }
-
-    return Point(
-        bg::get<0>(center) + radius * std::cos(phi),
-        bg::get<1>(center) + radius * std::sin(phi));
 }
 
 class TourReconstructor {
@@ -248,7 +151,7 @@ void TourReconstructor::beginCircleInsertion(TreeNodeId treeNodeId) {
         const TourNodeHandle rightHandle = tour_.next(leftHandle);
         const Point leftPoint = tour_.point(leftHandle);
         const Point rightPoint = tour_.point(rightHandle);
-        Point candidatePoint = findOptimalPoint(
+        Point candidatePoint = chooseInsertionPoint(
             center, radius, leftPoint, rightPoint);
         const double addedDistance =
             bg::distance(leftPoint, candidatePoint) +

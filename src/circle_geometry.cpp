@@ -3,10 +3,172 @@
 #include <boost/geometry.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
+#include <numbers>
+#include <stdexcept>
 
 namespace bg = boost::geometry;
+
+namespace {
+
+constexpr double fullTurn = 2.0 * std::numbers::pi;
+
+Point closestPointOnSegment(
+    const Point& point,
+    const Point& segmentStart,
+    const Point& segmentEnd) {
+    const double startX = bg::get<0>(segmentStart);
+    const double startY = bg::get<1>(segmentStart);
+    const double dx = bg::get<0>(segmentEnd) - startX;
+    const double dy = bg::get<1>(segmentEnd) - startY;
+    const double lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared == 0.0) {
+        return segmentStart;
+    }
+
+    const double offsetX = bg::get<0>(point) - startX;
+    const double offsetY = bg::get<1>(point) - startY;
+    const double fraction = std::clamp(
+        (offsetX * dx + offsetY * dy) / lengthSquared,
+        0.0,
+        1.0);
+    return Point{startX + fraction * dx, startY + fraction * dy};
+}
+
+double bearingFrom(const Point& origin, const Point& target) {
+    return std::atan2(
+        bg::get<1>(target) - bg::get<1>(origin),
+        bg::get<0>(target) - bg::get<0>(origin));
+}
+
+struct BoundaryPathObjective {
+    const Point& center;
+    double radius;
+    const Point& edgeStart;
+    const Point& edgeEnd;
+
+    [[nodiscard]] Point pointAt(double angle) const {
+        return Point{
+            bg::get<0>(center) + radius * std::cos(angle),
+            bg::get<1>(center) + radius * std::sin(angle)};
+    }
+
+    [[nodiscard]] double costAt(double angle) const {
+        const Point point = pointAt(angle);
+        return bg::distance(edgeStart, point) +
+               bg::distance(point, edgeEnd);
+    }
+
+    struct AngularDerivatives {
+        double first;
+        double second;
+    };
+
+    [[nodiscard]] AngularDerivatives derivativesAt(double angle) const {
+        const double cosine = std::cos(angle);
+        const double sine = std::sin(angle);
+        const Point point = pointAt(angle);
+        const double pointX = bg::get<0>(point);
+        const double pointY = bg::get<1>(point);
+        const double velocityX = -radius * sine;
+        const double velocityY = radius * cosine;
+        const double accelerationX = -radius * cosine;
+        const double accelerationY = -radius * sine;
+        const double velocitySquared = radius * radius;
+
+        AngularDerivatives result{0.0, 0.0};
+        const std::array<const Point*, 2> endpoints{
+            &edgeStart,
+            &edgeEnd,
+        };
+        for (const Point* endpoint : endpoints) {
+            const double offsetX = pointX - bg::get<0>(*endpoint);
+            const double offsetY = pointY - bg::get<1>(*endpoint);
+            const double distance = std::hypot(offsetX, offsetY);
+            const double directionalRate =
+                offsetX * velocityX + offsetY * velocityY;
+            result.first += directionalRate / distance;
+            result.second +=
+                (velocitySquared +
+                 offsetX * accelerationX +
+                 offsetY * accelerationY) /
+                    distance -
+                directionalRate * directionalRate /
+                    (distance * distance * distance);
+        }
+        return result;
+    }
+};
+
+struct BoundarySample {
+    double angle;
+    double cost;
+};
+
+Point chooseBoundaryPoint(
+    const BoundaryPathObjective& objective,
+    const Point& closestEdgePoint) {
+    const double firstBearing =
+        bearingFrom(objective.center, objective.edgeStart);
+    const double secondBearing =
+        bearingFrom(objective.center, objective.edgeEnd);
+    const double bisectorX =
+        std::cos(firstBearing) + std::cos(secondBearing);
+    const double bisectorY =
+        std::sin(firstBearing) + std::sin(secondBearing);
+    const double closestBearing =
+        bearingFrom(objective.center, closestEdgePoint);
+    const double bisectorBearing =
+        std::hypot(bisectorX, bisectorY) >
+                32.0 * std::numeric_limits<double>::epsilon()
+            ? std::atan2(bisectorY, bisectorX)
+            : closestBearing;
+
+    const std::array<double, 2> seedAngles{
+        closestBearing,
+        bisectorBearing,
+    };
+    // These cover the two useful geometric views of the edge: its closest
+    // approach to the circle and the average direction of its endpoints.
+    BoundarySample best{
+        seedAngles.front(),
+        objective.costAt(seedAngles.front()),
+    };
+    for (std::size_t index = 1; index < seedAngles.size(); ++index) {
+        const double angle = seedAngles[index];
+        const double cost = objective.costAt(angle);
+        if (cost < best.cost) {
+            best = {angle, cost};
+        }
+    }
+
+    const BoundaryPathObjective::AngularDerivatives derivatives =
+        objective.derivativesAt(best.angle);
+    const double curvatureTolerance =
+        std::numeric_limits<double>::epsilon() *
+        std::max(1.0, std::abs(best.cost));
+    if (std::isfinite(derivatives.first) &&
+        std::isfinite(derivatives.second) &&
+        derivatives.second > curvatureTolerance) {
+        // One refinement only. The modulo preserves the point represented by
+        // a large Newton step while keeping trigonometric range reduction tame.
+        const double rawStep = -derivatives.first / derivatives.second;
+        if (std::isfinite(rawStep)) {
+            const double refinedAngle =
+                best.angle + std::remainder(rawStep, fullTurn);
+            const double refinedCost = objective.costAt(refinedAngle);
+            if (refinedCost < best.cost) {
+                best = {refinedAngle, refinedCost};
+            }
+        }
+    }
+
+    return objective.pointAt(best.angle);
+}
+
+} // namespace
 
 Box circleBox(const Circle& c, double padding) {
     const double radius = c.r + padding;
@@ -24,6 +186,34 @@ Box circleBox(const Circle& c, double padding) {
 
 double gapDist(const Point& a, const Point& b, double ra, double rb) {
     return bg::distance(a, b) - (ra + rb);
+}
+
+Point chooseInsertionPoint(
+    const Point& center,
+    double radius,
+    const Point& edgeStart,
+    const Point& edgeEnd) {
+    if (radius < 0.0) {
+        throw std::invalid_argument(
+            "insertion-point circle radius must be non-negative");
+    }
+    if (radius == 0.0) {
+        return center;
+    }
+
+    const Point closestEdgePoint =
+        closestPointOnSegment(center, edgeStart, edgeEnd);
+    if (bg::distance(center, closestEdgePoint) <= radius) {
+        return closestEdgePoint;
+    }
+
+    const BoundaryPathObjective objective{
+        center,
+        radius,
+        edgeStart,
+        edgeEnd,
+    };
+    return chooseBoundaryPoint(objective, closestEdgePoint);
 }
 
 std::pair<Point, double> makeCombinedCircle(

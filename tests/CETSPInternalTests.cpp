@@ -9,9 +9,12 @@
 #include <boost/geometry/algorithms/equals.hpp>
 #include <boost/geometry/core/access.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <limits>
+#include <numbers>
 #include <random>
 #include <stdexcept>
 #include <string_view>
@@ -40,6 +43,60 @@ void expectNear(double actual, double expected, double tolerance, std::string_vi
 
 Circle makeCircle(double x, double y, double radius) {
     return {Point{x, y}, radius};
+}
+
+double pathLengthVia(
+    const Point& edgeStart,
+    const Point& point,
+    const Point& edgeEnd) {
+    return bg::distance(edgeStart, point) + bg::distance(point, edgeEnd);
+}
+
+Point closestPointOnSegmentForTest(
+    const Point& point,
+    const Point& segmentStart,
+    const Point& segmentEnd) {
+    const double startX = bg::get<0>(segmentStart);
+    const double startY = bg::get<1>(segmentStart);
+    const double dx = bg::get<0>(segmentEnd) - startX;
+    const double dy = bg::get<1>(segmentEnd) - startY;
+    const double lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared == 0.0) {
+        return segmentStart;
+    }
+
+    const double offsetX = bg::get<0>(point) - startX;
+    const double offsetY = bg::get<1>(point) - startY;
+    const double fraction = std::clamp(
+        (offsetX * dx + offsetY * dy) / lengthSquared,
+        0.0,
+        1.0);
+    return Point{startX + fraction * dx, startY + fraction * dy};
+}
+
+double denseOptimalInsertionPathLength(
+    const Point& center,
+    double radius,
+    const Point& edgeStart,
+    const Point& edgeEnd) {
+    const Point closestEdgePoint =
+        closestPointOnSegmentForTest(center, edgeStart, edgeEnd);
+    if (bg::distance(center, closestEdgePoint) <= radius) {
+        return bg::distance(edgeStart, edgeEnd);
+    }
+
+    constexpr std::size_t sampleCount = 16384;
+    double best = std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0; index < sampleCount; ++index) {
+        const double angle =
+            2.0 * std::numbers::pi * static_cast<double>(index) /
+            static_cast<double>(sampleCount);
+        const Point point{
+            bg::get<0>(center) + radius * std::cos(angle),
+            bg::get<1>(center) + radius * std::sin(angle)};
+        best = std::min(best, pathLengthVia(edgeStart, point, edgeEnd));
+    }
+    return best;
 }
 
 void testCoveringCircleReduction() {
@@ -219,6 +276,146 @@ void testTourStructuralMaintenance() {
     tour.assertValid();
 }
 
+void testInsertionPointSelection() {
+    const Point center{0.0, 0.0};
+
+    const Point zeroRadiusResult = chooseInsertionPoint(
+        center, 0.0, Point{-2.0, 1.0}, Point{3.0, 4.0});
+    expect(bg::equals(zeroRadiusResult, center),
+           "a zero-radius neighborhood inserts its center");
+
+    const Point crossingStart{-2.0, 0.0};
+    const Point crossingEnd{2.0, 0.0};
+    const Point crossingResult = chooseInsertionPoint(
+        center, 1.0, crossingStart, crossingEnd);
+    expectNear(
+        pathLengthVia(crossingStart, crossingResult, crossingEnd),
+        bg::distance(crossingStart, crossingEnd),
+        1e-12,
+        "an edge crossing the neighborhood has zero insertion cost");
+
+    const Point tangentStart{-2.0, 1.0};
+    const Point tangentEnd{2.0, 1.0};
+    const Point tangentResult = chooseInsertionPoint(
+        center, 1.0, tangentStart, tangentEnd);
+    expectNear(
+        pathLengthVia(tangentStart, tangentResult, tangentEnd),
+        bg::distance(tangentStart, tangentEnd),
+        1e-12,
+        "a tangent edge has zero insertion cost");
+
+    const Point repeatedEndpoint{2.0, 0.0};
+    const Point repeatedResult = chooseInsertionPoint(
+        center, 1.0, repeatedEndpoint, repeatedEndpoint);
+    expectNear(
+        pathLengthVia(repeatedEndpoint, repeatedResult, repeatedEndpoint),
+        2.0,
+        1e-10,
+        "a degenerate edge is minimized at the nearest boundary point");
+
+    bool negativeRadiusRejected = false;
+    try {
+        static_cast<void>(chooseInsertionPoint(
+            center, -1.0, crossingStart, crossingEnd));
+    } catch (const std::invalid_argument&) {
+        negativeRadiusRejected = true;
+    }
+    expect(negativeRadiusRejected,
+           "insertion-point geometry rejects a negative radius");
+
+    const Point regressionStart{
+        -0.6256443365812765,
+        -0.812701981837634};
+    const Point regressionEnd{
+        -2.0757443438448773,
+        -8.142396907134557};
+    const Point regressionResult = chooseInsertionPoint(
+        center, 1.0, regressionStart, regressionEnd);
+    const double regressionOracle = denseOptimalInsertionPathLength(
+        center, 1.0, regressionStart, regressionEnd);
+    expect(
+        pathLengthVia(regressionStart, regressionResult, regressionEnd) <=
+            regressionOracle + 1e-4,
+        "asymmetric insertion stays close to a dense boundary-search oracle");
+
+    const Point antipodalStart{-100.0, 1.01};
+    const Point antipodalEnd{100.0, 1.01};
+    const Point antipodalResult = chooseInsertionPoint(
+        center, 1.0, antipodalStart, antipodalEnd);
+    expectNear(
+        bg::get<0>(antipodalResult),
+        0.0,
+        1e-10,
+        "nearly antipodal endpoints preserve the symmetric boundary point");
+    expectNear(
+        bg::get<1>(antipodalResult),
+        1.0,
+        1e-10,
+        "nearly antipodal endpoints select the nearer boundary arc");
+
+    std::mt19937_64 randomEngine{0x243f6a8885a308d3ULL};
+    std::uniform_real_distribution<double> centerDistribution(-20.0, 20.0);
+    std::uniform_real_distribution<double> radiusDistribution(0.1, 5.0);
+    std::uniform_real_distribution<double> angleDistribution(
+        0.0, 2.0 * std::numbers::pi);
+    std::uniform_real_distribution<double> distanceFactorDistribution(
+        1.01, 10.0);
+    double maximumRelativePathExcess = 0.0;
+    for (std::size_t sample = 0; sample < 128; ++sample) {
+        const Point randomCenter{
+            centerDistribution(randomEngine),
+            centerDistribution(randomEngine)};
+        const double radius = radiusDistribution(randomEngine);
+        const double firstAngle = angleDistribution(randomEngine);
+        const double secondAngle = angleDistribution(randomEngine);
+        const double firstDistance =
+            radius * distanceFactorDistribution(randomEngine);
+        const double secondDistance =
+            radius * distanceFactorDistribution(randomEngine);
+        const Point edgeStart{
+            bg::get<0>(randomCenter) +
+                firstDistance * std::cos(firstAngle),
+            bg::get<1>(randomCenter) +
+                firstDistance * std::sin(firstAngle)};
+        const Point edgeEnd{
+            bg::get<0>(randomCenter) +
+                secondDistance * std::cos(secondAngle),
+            bg::get<1>(randomCenter) +
+                secondDistance * std::sin(secondAngle)};
+
+        const Point result = chooseInsertionPoint(
+            randomCenter, radius, edgeStart, edgeEnd);
+        const double resultDistance = bg::distance(result, randomCenter);
+        const double actualPathLength =
+            pathLengthVia(edgeStart, result, edgeEnd);
+        const double oraclePathLength = denseOptimalInsertionPathLength(
+            randomCenter, radius, edgeStart, edgeEnd);
+        const double numericalTolerance =
+            1e-9 * (1.0 + oraclePathLength);
+        maximumRelativePathExcess = std::max(
+            maximumRelativePathExcess,
+            (actualPathLength - oraclePathLength) /
+                (1.0 + oraclePathLength));
+
+        expect(
+            std::isfinite(bg::get<0>(result)) &&
+                std::isfinite(bg::get<1>(result)),
+            "randomized insertion geometry returns a finite point");
+        expect(
+            resultDistance <= radius + 1e-10 * (1.0 + radius),
+            "randomized insertion geometry returns a point in the neighborhood");
+        expect(
+            actualPathLength + numericalTolerance >=
+                bg::distance(edgeStart, edgeEnd),
+            "randomized insertion geometry respects the triangle inequality");
+    }
+    expectNear(
+        maximumRelativePathExcess,
+        0.0,
+        2e-3,
+        "one-step insertion geometry stays close to a dense angular oracle");
+}
+
 void testCombinedCircleRadiusRange() {
     const Point firstCenter{0.0, 0.0};
     const Point secondCenter{1.1, 0.0};
@@ -276,6 +473,7 @@ int main() {
     testMergeStateIsInternal();
     testReconstructionReinsertionCascade();
     testTourStructuralMaintenance();
+    testInsertionPointSelection();
     testCombinedCircleRadiusRange();
     testInternalBoundaryInputs();
 
