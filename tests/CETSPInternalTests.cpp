@@ -163,16 +163,17 @@ void testMergeStateIsInternal() {
            "a merge tree has one internal node per merge");
     if (tree.size() == 2 * leafCount - 1) {
         for (std::size_t id = 0; id < leafCount; ++id) {
-            expect(tree[id].isLeaf(),
+            expect(tree.isLeaf(id),
                    "surviving input circles occupy the merge-tree leaves");
             if (id < expectedCenters.size()) {
-                expectNear(bg::get<0>(tree[id].center), expectedCenters[id], 1e-12,
+                expectNear(bg::get<0>(tree.neighborhood(id).center), expectedCenters[id], 1e-12,
                            "leaf IDs follow reduced survivor order");
             }
         }
         for (std::size_t id = leafCount; id < tree.size(); ++id) {
-            expect(!tree[id].isLeaf() &&
-                       tree[id].left < id && tree[id].right < id,
+            const auto children = tree.children(id);
+            expect(!tree.isLeaf(id) &&
+                       children[0] < id && children[1] < id,
                    "internal merge-tree children precede their parent");
         }
     }
@@ -182,23 +183,16 @@ void testMergeStateIsInternal() {
            "a tree built from compacted survivors reconstructs a valid tour");
 }
 
-void testReconstructionReinsertionCascade() {
-    // Unmerging the root first creates leaf 0 and branch 3 as two tour nodes.
-    // Inserting branch 3 consumes two of leaf 0's three energy units. When
-    // branch 3 is unmerged, inserting leaf 1 consumes the last unit and forces
-    // leaf 0 through the explicit delete/reinsert work stack.
-    const std::vector<TreeNode> tree{
-        TreeNode::leaf(Point{0.0, 0.0}, 0.0),
-        TreeNode::leaf(Point{10.0, 0.0}, 0.0),
-        TreeNode::leaf(Point{20.0, 0.0}, 0.0),
-        TreeNode::branch(1, 2, 1.0, Point{15.0, 0.0}, 5.0),
-        TreeNode::branch(0, 3, 2.0, Point{10.0, 0.0}, 10.0),
-    };
+void testThreeLeafReconstruction() {
+    // Exercise multiple unmerge levels using a history produced through the
+    // same construction path as the solver.
     const std::vector<Circle> leaves{
         makeCircle(0.0, 0.0, 0.0),
         makeCircle(10.0, 0.0, 0.0),
         makeCircle(20.0, 0.0, 0.0),
     };
+    std::mt19937_64 randomEngine{0x6a09e667f3bcc909ULL};
+    const MergeTree tree = buildMergeTree(leaves, randomEngine);
 
     const auto tour = reconstructTour(tree);
     expect(tour.size() == leaves.size(),
@@ -220,6 +214,15 @@ void testTourStructuralMaintenance() {
            "multiple tree-node assignments can share one tour visit");
     expect(tour.previous(first) == first && tour.next(first) == first,
            "the first tour visit forms a singleton cycle");
+    const auto singletonEdges = tour.nearestEdges(Point{1.0, 0.0}, 1);
+    expect(singletonEdges.size() == 1 &&
+               singletonEdges.front().start() == first &&
+               singletonEdges.front().end() == first &&
+               bg::equals(singletonEdges.front().startPoint(),
+                          tour.point(first)) &&
+               bg::equals(singletonEdges.front().endPoint(),
+                          tour.point(first)),
+           "edge queries expose complete singleton-edge semantics");
     expect(tour.visitFor(0) == first && tour.visitFor(1) == first,
            "the assignment index resolves every shared tree node");
 
@@ -280,14 +283,14 @@ void testInsertionPointSelection() {
     const Point center{0.0, 0.0};
 
     const Point zeroRadiusResult = chooseInsertionPoint(
-        center, 0.0, Point{-2.0, 1.0}, Point{3.0, 4.0});
+        Circle{center, 0.0}, Point{-2.0, 1.0}, Point{3.0, 4.0});
     expect(bg::equals(zeroRadiusResult, center),
            "a zero-radius neighborhood inserts its center");
 
     const Point crossingStart{-2.0, 0.0};
     const Point crossingEnd{2.0, 0.0};
     const Point crossingResult = chooseInsertionPoint(
-        center, 1.0, crossingStart, crossingEnd);
+        Circle{center, 1.0}, crossingStart, crossingEnd);
     expectNear(
         pathLengthVia(crossingStart, crossingResult, crossingEnd),
         bg::distance(crossingStart, crossingEnd),
@@ -297,7 +300,7 @@ void testInsertionPointSelection() {
     const Point tangentStart{-2.0, 1.0};
     const Point tangentEnd{2.0, 1.0};
     const Point tangentResult = chooseInsertionPoint(
-        center, 1.0, tangentStart, tangentEnd);
+        Circle{center, 1.0}, tangentStart, tangentEnd);
     expectNear(
         pathLengthVia(tangentStart, tangentResult, tangentEnd),
         bg::distance(tangentStart, tangentEnd),
@@ -306,7 +309,7 @@ void testInsertionPointSelection() {
 
     const Point repeatedEndpoint{2.0, 0.0};
     const Point repeatedResult = chooseInsertionPoint(
-        center, 1.0, repeatedEndpoint, repeatedEndpoint);
+        Circle{center, 1.0}, repeatedEndpoint, repeatedEndpoint);
     expectNear(
         pathLengthVia(repeatedEndpoint, repeatedResult, repeatedEndpoint),
         2.0,
@@ -316,7 +319,7 @@ void testInsertionPointSelection() {
     bool negativeRadiusRejected = false;
     try {
         static_cast<void>(chooseInsertionPoint(
-            center, -1.0, crossingStart, crossingEnd));
+            Circle{center, -1.0}, crossingStart, crossingEnd));
     } catch (const std::invalid_argument&) {
         negativeRadiusRejected = true;
     }
@@ -330,7 +333,7 @@ void testInsertionPointSelection() {
         -2.0757443438448773,
         -8.142396907134557};
     const Point regressionResult = chooseInsertionPoint(
-        center, 1.0, regressionStart, regressionEnd);
+        Circle{center, 1.0}, regressionStart, regressionEnd);
     const double regressionOracle = denseOptimalInsertionPathLength(
         center, 1.0, regressionStart, regressionEnd);
     expect(
@@ -341,7 +344,7 @@ void testInsertionPointSelection() {
     const Point antipodalStart{-100.0, 1.01};
     const Point antipodalEnd{100.0, 1.01};
     const Point antipodalResult = chooseInsertionPoint(
-        center, 1.0, antipodalStart, antipodalEnd);
+        Circle{center, 1.0}, antipodalStart, antipodalEnd);
     expectNear(
         bg::get<0>(antipodalResult),
         0.0,
@@ -384,7 +387,7 @@ void testInsertionPointSelection() {
                 secondDistance * std::sin(secondAngle)};
 
         const Point result = chooseInsertionPoint(
-            randomCenter, radius, edgeStart, edgeEnd);
+            Circle{randomCenter, radius}, edgeStart, edgeEnd);
         const double resultDistance = bg::distance(result, randomCenter);
         const double actualPathLength =
             pathLengthVia(edgeStart, result, edgeEnd);
@@ -436,16 +439,12 @@ void testCombinedCircleRadiusRange() {
 
     std::mt19937_64 randomEngine{0x4d595df4d0f33173ULL};
     for (int sample = 0; sample < 32; ++sample) {
-        const auto [center, radius] =
-            makeCombinedCircle(
-                firstCenter,
-                firstRadius,
-                secondCenter,
-                secondRadius,
-                randomEngine);
-        static_cast<void>(center);
-        expect(std::isfinite(radius), "the combined-circle radius is finite");
-        expect(radius >= halfChord && radius <= overlapDepth,
+        const Circle combined = makeCombinedCircle(
+            Circle{firstCenter, firstRadius},
+            Circle{secondCenter, secondRadius},
+            randomEngine);
+        expect(std::isfinite(combined.r), "the combined-circle radius is finite");
+        expect(combined.r >= halfChord && combined.r <= overlapDepth,
                "the combined-circle radius lies between both geometric bounds");
     }
 }
@@ -454,14 +453,14 @@ void testInternalBoundaryInputs() {
     std::mt19937_64 randomEngine{1234};
     expect(buildMergeTree({}, randomEngine).empty(),
            "an empty instance produces an empty merge tree");
-    expect(reconstructTour({}).empty(),
+    expect(reconstructTour(MergeTree{}).empty(),
            "an empty merge tree produces an empty tour");
 
     const std::vector<Circle> singleton{makeCircle(2.0, -4.0, 3.0)};
     const auto singletonTree = buildMergeTree(singleton, randomEngine);
     expect(singletonTree.size() == 1, "one circle produces one merge-tree leaf");
     if (singletonTree.size() == 1) {
-        expect(singletonTree.front().isLeaf(),
+        expect(singletonTree.isLeaf(*singletonTree.root()),
                "the singleton merge-tree node has leaf semantics");
     }
 }
@@ -471,7 +470,7 @@ void testInternalBoundaryInputs() {
 int main() {
     testCoveringCircleReduction();
     testMergeStateIsInternal();
-    testReconstructionReinsertionCascade();
+    testThreeLeafReconstruction();
     testTourStructuralMaintenance();
     testInsertionPointSelection();
     testCombinedCircleRadiusRange();

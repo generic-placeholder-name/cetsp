@@ -14,10 +14,37 @@
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
+using NodeId = MergeTree::NodeId;
+
+TourEdge::TourEdge(
+    TourNodeHandle start,
+    TourNodeHandle end,
+    Point startPoint,
+    Point endPoint)
+    : start_(start),
+      end_(end),
+      startPoint_(std::move(startPoint)),
+      endPoint_(std::move(endPoint)) {}
+
+TourNodeHandle TourEdge::start() const noexcept {
+    return start_;
+}
+
+TourNodeHandle TourEdge::end() const noexcept {
+    return end_;
+}
+
+const Point& TourEdge::startPoint() const noexcept {
+    return startPoint_;
+}
+
+const Point& TourEdge::endPoint() const noexcept {
+    return endPoint_;
+}
 
 Tour::Node::Node(
     const Point& point,
-    TreeNodeId treeNodeId,
+    NodeId treeNodeId,
     std::size_t initialEnergy,
     TourNodeHandle previous,
     TourNodeHandle following)
@@ -30,11 +57,11 @@ Tour::Node::Node(
 }
 
 Tour::Node* Tour::resolve(TourNodeHandle handle) noexcept {
-    if (handle.slot >= nodeSlots.size()) {
+    if (handle.slot_ >= nodeSlots.size()) {
         return nullptr;
     }
-    NodeSlot& slot = nodeSlots[handle.slot];
-    if (slot.generation != handle.generation) {
+    NodeSlot& slot = nodeSlots[handle.slot_];
+    if (slot.generation != handle.generation_) {
         return nullptr;
     }
     return slot.node ? &*slot.node : nullptr;
@@ -42,11 +69,11 @@ Tour::Node* Tour::resolve(TourNodeHandle handle) noexcept {
 
 const Tour::Node* Tour::resolve(
     TourNodeHandle handle) const noexcept {
-    if (handle.slot >= nodeSlots.size()) {
+    if (handle.slot_ >= nodeSlots.size()) {
         return nullptr;
     }
-    const NodeSlot& slot = nodeSlots[handle.slot];
-    if (slot.generation != handle.generation) {
+    const NodeSlot& slot = nodeSlots[handle.slot_];
+    if (slot.generation != handle.generation_) {
         return nullptr;
     }
     return slot.node ? &*slot.node : nullptr;
@@ -67,7 +94,7 @@ const Tour::Node& Tour::requireNode(
     throw std::logic_error("stale tour-node handle");
 }
 
-void Tour::requireUnassignedTreeNode(TreeNodeId treeNodeId) const {
+void Tour::requireUnassignedTreeNode(NodeId treeNodeId) const {
     if (treeNodeId >= tourNodeForTreeNode.size()) {
         throw std::out_of_range("tree-node ID is outside this tour");
     }
@@ -83,13 +110,13 @@ std::string Tour::formatHandle(MaybeTourNodeHandle handle) const {
     if (resolve(*handle) == nullptr) {
         return "<stale>";
     }
-    return std::to_string(handle->slot) + ":" +
-           std::to_string(handle->generation);
+    return std::to_string(handle->slot_) + ":" +
+           std::to_string(handle->generation_);
 }
 
 TourNodeHandle Tour::createNode(
     const Point& point,
-    TreeNodeId treeNodeId,
+    NodeId treeNodeId,
     std::size_t initialEnergy,
     MaybeTourNodeHandle previous,
     MaybeTourNodeHandle following) {
@@ -137,11 +164,11 @@ TourNodeHandle Tour::createNode(
 }
 
 void Tour::destroyNode(TourNodeHandle handle) {
-    if (handle.slot >= nodeSlots.size()) {
+    if (handle.slot_ >= nodeSlots.size()) {
         throw std::logic_error("attempted to destroy an unknown tour node");
     }
-    NodeSlot& slot = nodeSlots[handle.slot];
-    if (!slot.node || slot.generation != handle.generation) {
+    NodeSlot& slot = nodeSlots[handle.slot_];
+    if (!slot.node || slot.generation != handle.generation_) {
         throw std::logic_error("attempted to destroy a stale tour node");
     }
 
@@ -154,7 +181,7 @@ void Tour::destroyNode(TourNodeHandle handle) {
         return;
     }
     ++slot.generation;
-    freeSlots.push_back(handle.slot);
+    freeSlots.push_back(handle.slot_);
 }
 
 void Tour::deleteNode(TourNodeHandle handle) {
@@ -195,7 +222,7 @@ void Tour::deleteNode(TourNodeHandle handle) {
         DBG("Head updated to handle=" << formatHandle(head));
     }
 
-    for (TreeNodeId treeNodeId : node.assignedTreeNodes) {
+    for (NodeId treeNodeId : node.assignedTreeNodes) {
         tourNodeForTreeNode[treeNodeId].reset();
     }
 
@@ -223,7 +250,7 @@ std::size_t Tour::size() const noexcept {
     return liveNodeCount;
 }
 
-MaybeTourNodeHandle Tour::visitFor(TreeNodeId treeNodeId) const {
+MaybeTourNodeHandle Tour::visitFor(NodeId treeNodeId) const {
     if (treeNodeId >= tourNodeForTreeNode.size()) {
         throw std::out_of_range("tree-node ID is outside the tour assignment map");
     }
@@ -250,22 +277,27 @@ MaybeTourNodeHandle Tour::nearestVisit(const Point& point) const {
     return candidate->second;
 }
 
-std::vector<TourNodeHandle> Tour::nearestEdgeStarts(
+std::vector<TourEdge> Tour::nearestEdges(
     const Point& point,
     std::size_t maximumCount) const {
-    std::vector<TourNodeHandle> handles;
-    handles.reserve(maximumCount);
+    std::vector<TourEdge> edges;
+    edges.reserve(maximumCount);
     for (auto candidate = segmentIndex.qbegin(
              bgi::nearest(point, maximumCount));
          candidate != segmentIndex.qend(); ++candidate) {
-        handles.push_back(candidate->second);
+        const TourNodeHandle startHandle = candidate->second;
+        const Node& start = requireNode(startHandle);
+        const TourNodeHandle endHandle = start.next;
+        const Node& end = requireNode(endHandle);
+        edges.push_back(TourEdge(
+            startHandle, endHandle, start.pos, end.pos));
     }
-    return handles;
+    return edges;
 }
 
 TourNodeHandle Tour::createFirstVisit(
     const Point& point,
-    TreeNodeId treeNodeId,
+    NodeId treeNodeId,
     std::size_t initialEnergy) {
     if (head) {
         throw std::logic_error("cannot create a first visit in a nonempty tour");
@@ -282,7 +314,7 @@ TourNodeHandle Tour::createFirstVisit(
 
 TourNodeHandle Tour::insertVisitBetween(
     const Point& point,
-    TreeNodeId treeNodeId,
+    NodeId treeNodeId,
     TourNodeHandle previousHandle,
     TourNodeHandle followingHandle,
     std::size_t initialEnergy) {
@@ -320,7 +352,7 @@ TourNodeHandle Tour::insertVisitBetween(
 
 void Tour::addAssignment(
     TourNodeHandle handle,
-    TreeNodeId treeNodeId,
+    NodeId treeNodeId,
     std::size_t energyIncrease) {
     requireUnassignedTreeNode(treeNodeId);
     Node& node = requireNode(handle);
@@ -330,7 +362,7 @@ void Tour::addAssignment(
     tourNodeForTreeNode[treeNodeId] = handle;
 }
 
-void Tour::removeAssignment(TreeNodeId treeNodeId) {
+void Tour::removeAssignment(NodeId treeNodeId) {
     const MaybeTourNodeHandle handle = visitFor(treeNodeId);
     if (!handle) {
         return;
@@ -344,9 +376,9 @@ void Tour::removeAssignment(TreeNodeId treeNodeId) {
     }
 }
 
-std::vector<TreeNodeId> Tour::eraseVisit(TourNodeHandle handle) {
+std::vector<NodeId> Tour::eraseVisit(TourNodeHandle handle) {
     const Node& node = requireNode(handle);
-    std::vector<TreeNodeId> assignments(
+    std::vector<NodeId> assignments(
         node.assignedTreeNodes.begin(), node.assignedTreeNodes.end());
     deleteNode(handle);
     return assignments;
@@ -370,7 +402,7 @@ std::size_t Tour::insertionCount(TourNodeHandle handle) const {
 
 void Tour::optimizeVisit(
     TourNodeHandle handle,
-    const std::vector<TreeNode>& treeNodes) {
+    const MergeTree& mergeTree) {
     Node& node = requireNode(handle);
     if (node.prev == handle) return;
     constexpr double EPS = 1e-12;
@@ -391,7 +423,7 @@ void Tour::optimizeVisit(
 
     DBG("[optimizeTourPoint] Handle " << formatHandle(handle)
         << " assigned tree nodes: ");
-    for (TreeNodeId treeNodeId : node.assignedTreeNodes) {
+    for (NodeId treeNodeId : node.assignedTreeNodes) {
         DBG_NOENDL(treeNodeId << " ");
     }
     DBG("");
@@ -406,15 +438,16 @@ void Tour::optimizeVisit(
     for (auto assignedIt = node.assignedTreeNodes.begin();
          assignedIt != node.assignedTreeNodes.end();) {
         const auto currentAssignment = assignedIt++;
-        const TreeNodeId treeNodeId = *currentAssignment;
+        const NodeId treeNodeId = *currentAssignment;
+        const Circle& neighborhood = mergeTree.neighborhood(treeNodeId);
         const auto candidate = pointIndex.qbegin(
-            bgi::nearest(treeNodes[treeNodeId].center, 1));
+            bgi::nearest(neighborhood.center, 1));
         if (candidate != pointIndex.qend()) {
             const auto& [candidatePoint, otherHandle] = *candidate;
             const double distance = bg::distance(
-                candidatePoint, treeNodes[treeNodeId].center);
+                candidatePoint, neighborhood.center);
             if (otherHandle != handle &&
-                distance <= treeNodes[treeNodeId].r) {
+                distance <= neighborhood.r) {
                 Node& other = requireNode(otherHandle);
                 node.assignedTreeNodes.erase(currentAssignment);
                 other.assignedTreeNodes.insert(treeNodeId);
@@ -441,9 +474,10 @@ void Tour::optimizeVisit(
     double T_min = 0.0, T_max = 1.0;
 
     if (bg::distance(a, b) < EPS) {
-        for (TreeNodeId treeNodeId : node.assignedTreeNodes) {
-            const auto& center = treeNodes[treeNodeId].center;
-            const double radius = treeNodes[treeNodeId].r;
+        for (NodeId treeNodeId : node.assignedTreeNodes) {
+            const Circle& neighborhood = mergeTree.neighborhood(treeNodeId);
+            const auto& center = neighborhood.center;
+            const double radius = neighborhood.r;
             if (bg::distance(a, center) > radius) {
                 T_min = 1.0;
                 T_max = 0.0;
@@ -451,11 +485,12 @@ void Tour::optimizeVisit(
             }
         }
     } else {
-        for (TreeNodeId treeNodeId : node.assignedTreeNodes) {
-            const auto& center = treeNodes[treeNodeId].center;
+        for (NodeId treeNodeId : node.assignedTreeNodes) {
+            const Circle& neighborhood = mergeTree.neighborhood(treeNodeId);
+            const auto& center = neighborhood.center;
             const double cx = bg::get<0>(center);
             const double cy = bg::get<1>(center);
-            const double radius = treeNodes[treeNodeId].r;
+            const double radius = neighborhood.r;
             const double fx = ax - cx;
             const double fy = ay - cy;
             const double quadraticA = dx * dx + dy * dy;
@@ -524,8 +559,8 @@ void Tour::optimizeVisit(
         gradientY /= norm;
 
         double maximumStep = std::numeric_limits<double>::infinity();
-        for (TreeNodeId treeNodeId : node.assignedTreeNodes) {
-            const TreeNode& circle = treeNodes[treeNodeId];
+        for (NodeId treeNodeId : node.assignedTreeNodes) {
+            const Circle& circle = mergeTree.neighborhood(treeNodeId);
             const double centerX = bg::get<0>(circle.center);
             const double centerY = bg::get<1>(circle.center);
             const double offsetX = x - centerX;
@@ -631,14 +666,14 @@ void Tour::assertValid() const {
         assert(following != nullptr);
         assert(previous->next == handle);
         assert(following->prev == handle);
-        for (TreeNodeId treeNodeId : node.assignedTreeNodes) {
+        for (NodeId treeNodeId : node.assignedTreeNodes) {
             assert(treeNodeId < tourNodeForTreeNode.size());
             assert(tourNodeForTreeNode[treeNodeId] == handle);
         }
     }
     assert(occupiedSlots == liveNodeCount);
 
-    for (TreeNodeId treeNodeId = 0;
+    for (NodeId treeNodeId = 0;
          treeNodeId < tourNodeForTreeNode.size(); ++treeNodeId) {
         const MaybeTourNodeHandle handle = tourNodeForTreeNode[treeNodeId];
         if (handle) {
@@ -654,8 +689,8 @@ void Tour::assertValid() const {
         const Node* node = resolve(handle);
         assert(node != nullptr);
         assert(bg::equals(indexedPoint, node->pos));
-        assert(!pointIndexed[handle.slot]);
-        pointIndexed[handle.slot] = true;
+        assert(!pointIndexed[handle.slot_]);
+        pointIndexed[handle.slot_] = true;
     }
 
     std::vector<bool> segmentIndexed(nodeSlots.size(), false);
@@ -666,8 +701,8 @@ void Tour::assertValid() const {
         const Node* following = resolve(node->next);
         assert(following != nullptr);
         assert(bg::equals(segment, Segment(node->pos, following->pos)));
-        assert(!segmentIndexed[handle.slot]);
-        segmentIndexed[handle.slot] = true;
+        assert(!segmentIndexed[handle.slot_]);
+        segmentIndexed[handle.slot_] = true;
     }
 
     for (std::size_t index = 0; index < nodeSlots.size(); ++index) {

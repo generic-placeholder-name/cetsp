@@ -25,11 +25,12 @@
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
+using NodeId = MergeTree::NodeId;
 
 namespace {
 
-using BoxValue = std::pair<Box, TreeNodeId>;
-using HeapEntry = std::pair<double, TreeNodeId>;
+using BoxValue = std::pair<Box, NodeId>;
+using HeapEntry = std::pair<double, NodeId>;
 
 template<std::size_t Capacity>
 using BoxValues = boost::container::small_vector<BoxValue, Capacity>;
@@ -90,7 +91,7 @@ void removeCoveringCircles(std::vector<Circle>& circles) {
     }
 }
 
-namespace {
+namespace cetsp_detail {
 
 class MergeTreeBuilder {
 public:
@@ -98,11 +99,11 @@ public:
         const std::vector<Circle>& circles,
         std::mt19937_64& randomEngine);
 
-    [[nodiscard]] std::vector<TreeNode> build();
+    [[nodiscard]] MergeTree build();
 
 private:
     struct Nearest {
-        TreeNodeId id;
+        NodeId id;
         double gap;
     };
 
@@ -110,22 +111,22 @@ private:
         Circle circle;
         bool active = true;
         std::optional<Nearest> nearest;
-        IdSet<TreeNodeId> dependents;
+        IdSet<NodeId> dependents;
 
         explicit ClusterState(Circle value) : circle(std::move(value)) {}
     };
 
     struct MergeCandidate {
-        TreeNodeId first;
-        TreeNodeId second;
+        NodeId first;
+        NodeId second;
         double gap;
     };
 
     template<std::size_t CandidateCount>
     [[nodiscard]] std::optional<Nearest> findNearest(
-        TreeNodeId treeNodeId) const;
-    void setNearest(TreeNodeId treeNodeId, Nearest nearest);
-    void clearNearest(TreeNodeId treeNodeId, bool eraseHeapEntry);
+        NodeId treeNodeId) const;
+    void setNearest(NodeId treeNodeId, Nearest nearest);
+    void clearNearest(NodeId treeNodeId, bool eraseHeapEntry);
     [[nodiscard]] MergeCandidate popClosestPair();
     void mergeClosestPair(std::size_t mergeIndex);
     void assertValid() const;
@@ -135,7 +136,7 @@ private:
     double rotationCosine_;
     double rotationSine_;
     std::vector<ClusterState> clusters_;
-    std::vector<TreeNode> treeNodes_;
+    std::vector<MergeTree::Node> nodes_;
     bgi::rtree<BoxValue, bgi::rstar<16>> circleIndex_;
     std::set<HeapEntry> mergeQueue_;
     std::size_t activeCount_ = 0;
@@ -149,9 +150,9 @@ MergeTreeBuilder::MergeTreeBuilder(
       rotationCosine_(0.0),
       rotationSine_(0.0),
       activeCount_(circles.size()) {
-    assert(circles.size() >= 2);
+    assert(!circles.empty());
     clusters_.reserve(2 * leafCount_ - 1);
-    treeNodes_.reserve(2 * leafCount_);
+    nodes_.reserve(2 * leafCount_ - 1);
 
     std::uniform_real_distribution<> angleDistribution(
         0.0, 2 * std::numbers::pi);
@@ -164,15 +165,19 @@ MergeTreeBuilder::MergeTreeBuilder(
         rotatePoint(
             rotated.center, rotationCosine_, rotationSine_);
         clusters_.emplace_back(rotated);
-        treeNodes_.push_back(
-            TreeNode::leaf(rotated.center, rotated.r));
+        nodes_.push_back(MergeTree::Node{input, std::nullopt});
     }
 
-    for (TreeNodeId id = 0; id < leafCount_; ++id) {
+    for (NodeId id = 0; id < leafCount_; ++id) {
         circleIndex_.insert({circleBox(clusters_[id].circle), id});
     }
 
-    for (TreeNodeId id = 0; id < leafCount_; ++id) {
+    if (leafCount_ == 1) {
+        assertValid();
+        return;
+    }
+
+    for (NodeId id = 0; id < leafCount_; ++id) {
         const std::optional<Nearest> nearest = findNearest<16>(id);
         if (!nearest) {
             throw std::logic_error(
@@ -183,7 +188,7 @@ MergeTreeBuilder::MergeTreeBuilder(
 
     DBG("Done initializing NNs");
     DBG("Nearest neighbors of each node:");
-    for (TreeNodeId id = 0; id < leafCount_; ++id) {
+    for (NodeId id = 0; id < leafCount_; ++id) {
         DBG("Node " << id
             << " -> NN: " << clusters_[id].nearest->id
             << " (gap: " << clusters_[id].nearest->gap << ")");
@@ -193,7 +198,7 @@ MergeTreeBuilder::MergeTreeBuilder(
 
 template<std::size_t CandidateCount>
 std::optional<MergeTreeBuilder::Nearest> MergeTreeBuilder::findNearest(
-    TreeNodeId treeNodeId) const {
+    NodeId treeNodeId) const {
     const Circle& circle = clusters_[treeNodeId].circle;
     BoxValues<CandidateCount> candidates;
     circleIndex_.query(
@@ -203,14 +208,10 @@ std::optional<MergeTreeBuilder::Nearest> MergeTreeBuilder::findNearest(
     std::optional<Nearest> nearest;
     double bestGap = std::numeric_limits<double>::infinity();
     for (const BoxValue& candidateValue : candidates) {
-        const TreeNodeId candidateId = candidateValue.second;
+        const NodeId candidateId = candidateValue.second;
         if (candidateId == treeNodeId) continue;
         const Circle& candidate = clusters_[candidateId].circle;
-        const double gap = gapDist(
-            circle.center,
-            candidate.center,
-            circle.r,
-            candidate.r);
+        const double gap = gapDist(circle, candidate);
         if (gap < bestGap) {
             bestGap = gap;
             nearest = Nearest{candidateId, gap};
@@ -220,7 +221,7 @@ std::optional<MergeTreeBuilder::Nearest> MergeTreeBuilder::findNearest(
 }
 
 void MergeTreeBuilder::setNearest(
-    TreeNodeId treeNodeId,
+    NodeId treeNodeId,
     Nearest nearest) {
     ClusterState& cluster = clusters_[treeNodeId];
     if (!cluster.active || cluster.nearest) {
@@ -240,7 +241,7 @@ void MergeTreeBuilder::setNearest(
 }
 
 void MergeTreeBuilder::clearNearest(
-    TreeNodeId treeNodeId,
+    NodeId treeNodeId,
     bool eraseHeapEntry) {
     ClusterState& cluster = clusters_[treeNodeId];
     if (!cluster.nearest) {
@@ -271,7 +272,7 @@ MergeTreeBuilder::MergeCandidate MergeTreeBuilder::popClosestPair() {
             first.nearest->gap != gap) {
             continue;
         }
-        const TreeNodeId secondId = first.nearest->id;
+        const NodeId secondId = first.nearest->id;
         if (secondId >= clusters_.size() ||
             !clusters_[secondId].active) {
             throw std::logic_error(
@@ -286,8 +287,8 @@ MergeTreeBuilder::MergeCandidate MergeTreeBuilder::popClosestPair() {
 
 void MergeTreeBuilder::mergeClosestPair(std::size_t mergeIndex) {
     const MergeCandidate candidate = popClosestPair();
-    const TreeNodeId firstId = candidate.first;
-    const TreeNodeId secondId = candidate.second;
+    const NodeId firstId = candidate.first;
+    const NodeId secondId = candidate.second;
     ClusterState& first = clusters_[firstId];
     ClusterState& second = clusters_[secondId];
     if (!first.nearest || first.nearest->id != secondId ||
@@ -296,32 +297,26 @@ void MergeTreeBuilder::mergeClosestPair(std::size_t mergeIndex) {
             "selected merge pair has incomplete nearest-neighbor state");
     }
 
-    IdSet<TreeNodeId> affected = first.dependents;
+    IdSet<NodeId> affected = first.dependents;
     affected.insert(second.dependents.begin(), second.dependents.end());
     affected.erase(firstId);
     affected.erase(secondId);
 
-    const TreeNodeId newId = clusters_.size();
+    const NodeId newId = clusters_.size();
     DBG("Merge #" << (mergeIndex + 1)
         << ": " << firstId << " + " << secondId
         << " (gap=" << candidate.gap << ") -> newId=" << newId);
 
     const Circle firstCircle = first.circle;
     const Circle secondCircle = second.circle;
-    const auto [combinedCenter, combinedRadius] = makeCombinedCircle(
-        firstCircle.center,
-        firstCircle.r,
-        secondCircle.center,
-        secondCircle.r,
-        randomEngine_);
-    Circle combined{combinedCenter, combinedRadius};
-
-    treeNodes_.push_back(TreeNode::branch(
-        firstId,
-        secondId,
-        candidate.gap,
-        combined.center,
-        combined.r));
+    Circle combined = makeCombinedCircle(
+        firstCircle, secondCircle, randomEngine_);
+    Circle outputNeighborhood = combined;
+    rotatePoint(
+        outputNeighborhood.center, rotationCosine_, -rotationSine_);
+    nodes_.push_back(MergeTree::Node{
+        outputNeighborhood,
+        MergeTree::Branch{{firstId, secondId}, candidate.gap}});
 
     // The first entry was already popped; the second remains queued.
     clearNearest(firstId, false);
@@ -355,7 +350,7 @@ void MergeTreeBuilder::mergeClosestPair(std::size_t mergeIndex) {
                ? newNearest->gap
                : std::numeric_limits<double>::infinity()));
 
-    for (TreeNodeId affectedId : affected) {
+    for (NodeId affectedId : affected) {
         if (affectedId >= clusters_.size() ||
             !clusters_[affectedId].active ||
             !clusters_[affectedId].nearest) {
@@ -381,7 +376,7 @@ void MergeTreeBuilder::assertValid() const {
 #ifndef NDEBUG
     assert(circleIndex_.size() == activeCount_);
     std::size_t observedActive = 0;
-    for (TreeNodeId id = 0; id < clusters_.size(); ++id) {
+    for (NodeId id = 0; id < clusters_.size(); ++id) {
         const ClusterState& cluster = clusters_[id];
         if (!cluster.active) {
             assert(!cluster.nearest);
@@ -399,7 +394,7 @@ void MergeTreeBuilder::assertValid() const {
         } else {
             assert(activeCount_ == 1);
         }
-        for (TreeNodeId dependent : cluster.dependents) {
+        for (NodeId dependent : cluster.dependents) {
             assert(dependent < clusters_.size());
             assert(clusters_[dependent].active);
             assert(clusters_[dependent].nearest);
@@ -426,33 +421,25 @@ void MergeTreeBuilder::assertValid() const {
 #endif
 }
 
-std::vector<TreeNode> MergeTreeBuilder::build() {
+MergeTree MergeTreeBuilder::build() {
     for (std::size_t mergeIndex = 0;
          mergeIndex < leafCount_ - 1;
          ++mergeIndex) {
         mergeClosestPair(mergeIndex);
     }
 
-    for (TreeNode& node : treeNodes_) {
-        rotatePoint(node.center, rotationCosine_, -rotationSine_);
-    }
-
-    DBG("Combine complete. Total tree nodes=" << treeNodes_.size());
-    return std::move(treeNodes_);
+    DBG("Combine complete. Total tree nodes=" << nodes_.size());
+    return MergeTree(std::move(nodes_));
 }
 
-} // namespace
+} // namespace cetsp_detail
 
-std::vector<TreeNode> buildMergeTree(
+MergeTree buildMergeTree(
     const std::vector<Circle>& circles,
     std::mt19937_64& randomEngine) {
     if (circles.empty()) {
-        return {};
+        return MergeTree{};
     }
-    if (circles.size() == 1) {
-        return {TreeNode::leaf(circles.front().center, circles.front().r)};
-    }
-
-    MergeTreeBuilder builder(circles, randomEngine);
+    cetsp_detail::MergeTreeBuilder builder(circles, randomEngine);
     return builder.build();
 }

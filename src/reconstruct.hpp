@@ -8,7 +8,6 @@
 
 // ==================== Tour reconstruction ====================
 
-// Given a merge tree (vector<TreeNode>), reconstruct the tour by "unmerging" nodes.
-// At each step, remove the highest-gap internal node from the tour and insert its children.
-// Returns the sequence of tour points.
-std::vector<Point> reconstructTour(const std::vector<TreeNode>& treeNodes);
+// Reconstruct a tour by unmerging the highest-gap branches and inserting their
+// children.
+std::vector<Point> reconstructTour(const MergeTree& mergeTree);

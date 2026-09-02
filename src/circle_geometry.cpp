@@ -184,15 +184,16 @@ Box circleBox(const Circle& c, double padding) {
     );
 }
 
-double gapDist(const Point& a, const Point& b, double ra, double rb) {
-    return bg::distance(a, b) - (ra + rb);
+double gapDist(const Circle& first, const Circle& second) {
+    return bg::distance(first.center, second.center) - (first.r + second.r);
 }
 
 Point chooseInsertionPoint(
-    const Point& center,
-    double radius,
+    const Circle& neighborhood,
     const Point& edgeStart,
     const Point& edgeEnd) {
+    const Point& center = neighborhood.center;
+    const double radius = neighborhood.r;
     if (radius < 0.0) {
         throw std::invalid_argument(
             "insertion-point circle radius must be non-negative");
@@ -216,12 +217,16 @@ Point chooseInsertionPoint(
     return chooseBoundaryPoint(objective, closestEdgePoint);
 }
 
-std::pair<Point, double> makeCombinedCircle(
-    const Point& p1,
-    double r1,
-    const Point& p2,
-    double r2,
+Circle makeCombinedCircle(
+    const Circle& first,
+    const Circle& second,
     std::mt19937_64& randomEngine) {
+    // Unpack the circles for ease of working with their components.
+    const Point& p1 = first.center;
+    const double r1 = first.r;
+    const Point& p2 = second.center;
+    const double r2 = second.r;
+
     // Basically, a circle approximating the "lens" shape formed by the intersection of two circles.
     // This choice is largely arbitrary but seems to work better than just taking the midpoint.
     double x1 = bg::get<0>(p1), y1 = bg::get<1>(p1);
@@ -231,7 +236,7 @@ std::pair<Point, double> makeCombinedCircle(
 
     // If one circle is completely inside the other
     if (d + std::min(r1, r2) <= std::max(r1, r2)) {
-        return (r1 < r2) ? std::make_pair(p1, r1) : std::make_pair(p2, r2);
+        return (r1 < r2) ? first : second;
     }
 
     // Normalize direction vector
@@ -249,7 +254,7 @@ std::pair<Point, double> makeCombinedCircle(
 
     // Handle non-overlapping case (set radius = 0)
     if (d >= r1 + r2) {
-        return std::make_pair(center, 0.0);
+        return Circle{center, 0.0};
     }
 
     // Circles intersect — compute potential radius range
@@ -265,5 +270,5 @@ std::pair<Point, double> makeCombinedCircle(
     std::uniform_real_distribution<> dis(minimumRadius, maximumRadius);
     double radius = dis(randomEngine);
 
-    return std::make_pair(center, radius);
+    return Circle{center, radius};
 }

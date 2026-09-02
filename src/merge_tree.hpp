@@ -3,55 +3,50 @@
 #include <cetsp/types.hpp>
 
 #include <array>
-#include <cassert>
 #include <cstddef>
-#include <limits>
+#include <optional>
+#include <vector>
 
-using TreeNodeId = std::size_t;
+namespace cetsp_detail {
+class MergeTreeBuilder;
+}
 
-// Internal representation of the binary merge history. Nodes are stored in a
-// vector and children always precede their parent.
-struct TreeNode {
-    TreeNodeId left;
-    TreeNodeId right;
-    double mergeGap;
-    Point center;
-    double r;
+// Immutable full-binary merge history. Every non-root node has exactly one
+// parent, every branch has two children, and node IDs remain stable for the
+// lifetime of the tree.
+class MergeTree {
+public:
+    using NodeId = std::size_t;
 
-    [[nodiscard]] static TreeNode leaf(const Point& center, double radius) {
-        return TreeNode(noChild, noChild, 0.0, center, radius);
-    }
+    MergeTree() = default;
 
-    [[nodiscard]] static TreeNode branch(
-        TreeNodeId left,
-        TreeNodeId right,
-        double mergeGap,
-        const Point& center,
-        double radius) {
-        assert(left != noChild && right != noChild);
-        return TreeNode(left, right, mergeGap, center, radius);
-    }
+    [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] std::size_t size() const noexcept;
+    [[nodiscard]] std::size_t leafCount() const noexcept;
+    [[nodiscard]] std::optional<NodeId> root() const noexcept;
 
-    [[nodiscard]] bool isLeaf() const noexcept {
-        assert((left == noChild) == (right == noChild) &&
-               "a merge-tree node must have either zero or two children");
-        return left == noChild;
-    }
-
-    [[nodiscard]] std::array<TreeNodeId, 2> children() const noexcept {
-        assert(!isLeaf() && "a merge-tree leaf has no children");
-        return {left, right};
-    }
+    [[nodiscard]] const Circle& neighborhood(NodeId node) const;
+    [[nodiscard]] bool isLeaf(NodeId node) const;
+    [[nodiscard]] std::array<NodeId, 2> children(NodeId node) const;
+    [[nodiscard]] double mergeGap(NodeId node) const;
 
 private:
-    static constexpr TreeNodeId noChild =
-        std::numeric_limits<TreeNodeId>::max();
+    struct Branch {
+        std::array<NodeId, 2> children;
+        double mergeGap;
+    };
 
-    TreeNode(
-        TreeNodeId left,
-        TreeNodeId right,
-        double mergeGap,
-        const Point& center,
-        double radius)
-        : left(left), right(right), mergeGap(mergeGap), center(center), r(radius) {}
+    struct Node {
+        Circle neighborhood;
+        std::optional<Branch> branch;
+    };
+
+    explicit MergeTree(std::vector<Node> nodes);
+
+    [[nodiscard]] const Node& node(NodeId id) const;
+    void validate() const;
+
+    std::vector<Node> nodes_;
+
+    friend class cetsp_detail::MergeTreeBuilder;
 };

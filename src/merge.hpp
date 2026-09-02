@@ -14,9 +14,8 @@
 // Mutates the vector but does not attach solver state to the remaining inputs.
 void removeCoveringCircles(std::vector<Circle>& circles);
 
-// Build a merge tree from the given circles.
-// Returns a vector of TreeNodes representing the merge process.
-std::vector<TreeNode> buildMergeTree(
+// Build an immutable merge history from the given circles.
+MergeTree buildMergeTree(
     const std::vector<Circle>& circles,
     std::mt19937_64& randomEngine);
 

@@ -188,7 +188,7 @@ std::vector<Point> solveCetsp(
                 }
 
                 std::mt19937_64 randomEngine(repeatSeeds[repeatIndex]);
-                std::vector<TreeNode> mergeTree =
+                MergeTree mergeTree =
                     buildMergeTree(circlesCopy, randomEngine);
                 std::vector<Point> tour = reconstructTour(mergeTree);
 

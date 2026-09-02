@@ -20,6 +20,7 @@ namespace bg = boost::geometry;
 namespace {
 
 constexpr std::size_t energyPerInsertion = 3;
+using NodeId = MergeTree::NodeId;
 
 [[nodiscard]] constexpr bool reachedPowerOfTwoCheckpoint(
     std::size_t value) noexcept {
@@ -27,23 +28,18 @@ constexpr std::size_t energyPerInsertion = 3;
 }
 
 void sortByRadius(
-    std::vector<TreeNodeId>& ids,
-    const std::vector<TreeNode>& treeNodes) {
-    std::sort(ids.begin(), ids.end(), [&](TreeNodeId a, TreeNodeId b) {
-        return treeNodes[a].r < treeNodes[b].r;
+    std::vector<NodeId>& ids,
+    const MergeTree& mergeTree) {
+    std::sort(ids.begin(), ids.end(), [&](NodeId a, NodeId b) {
+        return mergeTree.neighborhood(a).r < mergeTree.neighborhood(b).r;
     });
-}
-
-std::string formatHandle(TourNodeHandle handle) {
-    return std::to_string(handle.slot) + ":" +
-           std::to_string(handle.generation);
 }
 
 class TourReconstructor {
 public:
-    explicit TourReconstructor(const std::vector<TreeNode>& treeNodes)
-        : treeNodes_(treeNodes), tour_(treeNodes.size()) {
-        insertionStack_.reserve(treeNodes.size());
+    explicit TourReconstructor(const MergeTree& mergeTree)
+        : mergeTree_(mergeTree), tour_(mergeTree.size()) {
+        insertionStack_.reserve(mergeTree.size());
     }
 
     [[nodiscard]] std::vector<Point> reconstruct();
@@ -56,44 +52,43 @@ private:
     };
 
     struct InsertionStep {
-        TreeNodeId treeNodeId;
+        NodeId treeNodeId;
         InsertionPhase phase;
     };
 
-    [[nodiscard]] std::vector<TreeNodeId> processNeighbor(
+    [[nodiscard]] std::vector<NodeId> processNeighbor(
         TourNodeHandle neighborHandle);
     void scheduleAfterNeighbor(
-        TreeNodeId treeNodeId,
+        NodeId treeNodeId,
         InsertionPhase continuation,
         TourNodeHandle neighborHandle);
-    void beginCircleInsertion(TreeNodeId treeNodeId);
-    void resumeCircleInsertionAfterPreviousNeighbor(TreeNodeId treeNodeId);
-    void finishCircleInsertion(TreeNodeId treeNodeId);
-    void insertCircle(TreeNodeId treeNodeId);
+    void beginCircleInsertion(NodeId treeNodeId);
+    void resumeCircleInsertionAfterPreviousNeighbor(NodeId treeNodeId);
+    void finishCircleInsertion(NodeId treeNodeId);
+    void insertCircle(NodeId treeNodeId);
 
-    const std::vector<TreeNode>& treeNodes_;
+    const MergeTree& mergeTree_;
     Tour tour_;
     std::vector<InsertionStep> insertionStack_;
 };
 
-std::vector<TreeNodeId> TourReconstructor::processNeighbor(
+std::vector<NodeId> TourReconstructor::processNeighbor(
     TourNodeHandle neighborHandle) {
     if (!tour_.consumeEnergy(neighborHandle)) {
         return {};
     }
 
-    DBG("Neighbor handle=" << formatHandle(neighborHandle)
-        << " has zero energy, removing and reinserting its assignments.");
-    std::vector<TreeNodeId> assignments = tour_.eraseVisit(neighborHandle);
-    sortByRadius(assignments, treeNodes_);
+    DBG("Neighbor visit has zero energy; removing and reinserting its assignments.");
+    std::vector<NodeId> assignments = tour_.eraseVisit(neighborHandle);
+    sortByRadius(assignments, mergeTree_);
     return assignments;
 }
 
 void TourReconstructor::scheduleAfterNeighbor(
-    TreeNodeId treeNodeId,
+    NodeId treeNodeId,
     InsertionPhase continuation,
     TourNodeHandle neighborHandle) {
-    std::vector<TreeNodeId> reinsertions = processNeighbor(neighborHandle);
+    std::vector<NodeId> reinsertions = processNeighbor(neighborHandle);
 
     // This explicitly encodes the old recursive order. The continuation sits
     // below every reinsertion, and reverse scheduling makes the first
@@ -104,10 +99,10 @@ void TourReconstructor::scheduleAfterNeighbor(
     }
 }
 
-void TourReconstructor::beginCircleInsertion(TreeNodeId treeNodeId) {
-    const TreeNode& treeNode = treeNodes_[treeNodeId];
-    const Point& center = treeNode.center;
-    const double radius = treeNode.r;
+void TourReconstructor::beginCircleInsertion(NodeId treeNodeId) {
+    const Circle& neighborhood = mergeTree_.neighborhood(treeNodeId);
+    const Point& center = neighborhood.center;
+    const double radius = neighborhood.r;
 
     DBG(tour_.size() << " points and segments in the tour indexes.");
     DBG("Inserting circle id=" << treeNodeId << " at ("
@@ -115,10 +110,9 @@ void TourReconstructor::beginCircleInsertion(TreeNodeId treeNodeId) {
         << "), r=" << radius);
 
     if (tour_.empty()) {
-        const TourNodeHandle handle = tour_.createFirstVisit(
-            center, treeNodeId, energyPerInsertion);
-        DBG("Created first TourNode handle=" << formatHandle(handle)
-            << " for tree node " << treeNodeId);
+        static_cast<void>(tour_.createFirstVisit(
+            center, treeNodeId, energyPerInsertion));
+        DBG("Created first tour visit for tree node " << treeNodeId);
         return;
     }
 
@@ -131,7 +125,7 @@ void TourReconstructor::beginCircleInsertion(TreeNodeId treeNodeId) {
             tour_.addAssignment(
                 *existingHandle, treeNodeId, energyPerInsertion);
             DBG("Linked tree node " << treeNodeId
-                << " to existing handle " << formatHandle(*existingHandle));
+                << " to an existing tour visit");
             scheduleAfterNeighbor(
                 treeNodeId,
                 InsertionPhase::afterPreviousNeighbor,
@@ -143,37 +137,34 @@ void TourReconstructor::beginCircleInsertion(TreeNodeId treeNodeId) {
     DBG("Finding best edge to insert via segment R-tree...");
     constexpr std::size_t candidateCount = 16;
     double bestAddedDistance = std::numeric_limits<double>::infinity();
-    MaybeTourNodeHandle bestLeft;
+    std::optional<TourEdge> bestEdge;
     Point bestPoint;
 
-    for (TourNodeHandle leftHandle :
-         tour_.nearestEdgeStarts(center, candidateCount)) {
-        const TourNodeHandle rightHandle = tour_.next(leftHandle);
-        const Point leftPoint = tour_.point(leftHandle);
-        const Point rightPoint = tour_.point(rightHandle);
+    for (const TourEdge& edge :
+         tour_.nearestEdges(center, candidateCount)) {
+        const Point& leftPoint = edge.startPoint();
+        const Point& rightPoint = edge.endPoint();
         Point candidatePoint = chooseInsertionPoint(
-            center, radius, leftPoint, rightPoint);
+            neighborhood, leftPoint, rightPoint);
         const double addedDistance =
             bg::distance(leftPoint, candidatePoint) +
             bg::distance(candidatePoint, rightPoint) -
             bg::distance(leftPoint, rightPoint);
         if (addedDistance < bestAddedDistance) {
             bestAddedDistance = addedDistance;
-            bestLeft = leftHandle;
+            bestEdge = edge;
             bestPoint = candidatePoint;
         }
     }
 
-    if (!bestLeft) {
+    if (!bestEdge) {
         throw std::logic_error(
             "failed to find a tour edge for circle insertion");
     }
 
-    const TourNodeHandle leftHandle = *bestLeft;
-    const TourNodeHandle rightHandle = tour_.next(leftHandle);
-    DBG("Best edge for insertion: between handle="
-        << formatHandle(leftHandle) << " and handle="
-        << formatHandle(rightHandle) << " at point ("
+    const TourNodeHandle leftHandle = bestEdge->start();
+    const TourNodeHandle rightHandle = bestEdge->end();
+    DBG("Best edge for insertion has point ("
         << bg::get<0>(bestPoint) << ", " << bg::get<1>(bestPoint)
         << "), addCost=" << bestAddedDistance);
 
@@ -183,10 +174,7 @@ void TourReconstructor::beginCircleInsertion(TreeNodeId treeNodeId) {
         leftHandle,
         rightHandle,
         energyPerInsertion);
-    DBG("Inserted new TourNode handle=" << formatHandle(newHandle)
-        << " for tree node " << treeNodeId << " between handles "
-        << formatHandle(leftHandle) << " and "
-        << formatHandle(rightHandle));
+    DBG("Inserted a new tour visit for tree node " << treeNodeId);
 
     scheduleAfterNeighbor(
         treeNodeId,
@@ -195,7 +183,7 @@ void TourReconstructor::beginCircleInsertion(TreeNodeId treeNodeId) {
 }
 
 void TourReconstructor::resumeCircleInsertionAfterPreviousNeighbor(
-    TreeNodeId treeNodeId) {
+    NodeId treeNodeId) {
     const MaybeTourNodeHandle currentHandle = tour_.visitFor(treeNodeId);
     if (!currentHandle) {
         throw std::logic_error(
@@ -208,7 +196,7 @@ void TourReconstructor::resumeCircleInsertionAfterPreviousNeighbor(
         tour_.next(*currentHandle));
 }
 
-void TourReconstructor::finishCircleInsertion(TreeNodeId treeNodeId) {
+void TourReconstructor::finishCircleInsertion(NodeId treeNodeId) {
     const MaybeTourNodeHandle currentHandle = tour_.visitFor(treeNodeId);
     if (!currentHandle) {
         throw std::logic_error(
@@ -217,11 +205,11 @@ void TourReconstructor::finishCircleInsertion(TreeNodeId treeNodeId) {
 
     if (reachedPowerOfTwoCheckpoint(
             tour_.insertionCount(*currentHandle))) {
-        tour_.optimizeVisit(*currentHandle, treeNodes_);
+        tour_.optimizeVisit(*currentHandle, mergeTree_);
     }
 }
 
-void TourReconstructor::insertCircle(TreeNodeId treeNodeId) {
+void TourReconstructor::insertCircle(NodeId treeNodeId) {
     if (!insertionStack_.empty()) {
         throw std::logic_error("nested tour insertion stack is already active");
     }
@@ -246,18 +234,20 @@ void TourReconstructor::insertCircle(TreeNodeId treeNodeId) {
 }
 
 std::vector<Point> TourReconstructor::reconstruct() {
-    const std::size_t nodeCount = treeNodes_.size();
-    if (treeNodes_.empty()) {
+    const std::size_t nodeCount = mergeTree_.size();
+    const std::optional<NodeId> root = mergeTree_.root();
+    if (!root) {
         return {};
     }
 
     DBG("Starting unmerge with " << nodeCount << " tree nodes.");
-    std::priority_queue<std::pair<double, TreeNodeId>> pendingBranches;
-    pendingBranches.push(
-        {treeNodes_[nodeCount - 1].mergeGap, nodeCount - 1});
+    std::priority_queue<std::pair<double, NodeId>> pendingBranches;
+    if (!mergeTree_.isLeaf(*root)) {
+        pendingBranches.push({mergeTree_.mergeGap(*root), *root});
+    }
 
-    DBG("Inserting root node id=" << (nodeCount - 1));
-    insertCircle(nodeCount - 1);
+    DBG("Inserting root node id=" << *root);
+    insertCircle(*root);
     tour_.assertValid();
 
     std::size_t nodesProcessed = 0;
@@ -265,19 +255,18 @@ std::vector<Point> TourReconstructor::reconstruct() {
         const auto [mergeGap, treeNodeId] = pendingBranches.top();
         pendingBranches.pop();
         ++nodesProcessed;
-        if (treeNodes_[treeNodeId].isLeaf()) continue;
+        if (mergeTree_.isLeaf(treeNodeId)) continue;
 
         DBG("Unmerging node id=" << treeNodeId
             << " (mergeGap=" << mergeGap
-            << "), left=" << treeNodes_[treeNodeId].left
-            << ", right=" << treeNodes_[treeNodeId].right);
+            << ")");
 
         tour_.removeAssignment(treeNodeId);
-        for (TreeNodeId child : treeNodes_[treeNodeId].children()) {
+        for (NodeId child : mergeTree_.children(treeNodeId)) {
             DBG("Inserting child node id=" << child);
             insertCircle(child);
-            if (!treeNodes_[child].isLeaf()) {
-                pendingBranches.push({treeNodes_[child].mergeGap, child});
+            if (!mergeTree_.isLeaf(child)) {
+                pendingBranches.push({mergeTree_.mergeGap(child), child});
             }
         }
 
@@ -285,43 +274,41 @@ std::vector<Point> TourReconstructor::reconstruct() {
         // every assignment visits shared tour nodes once per assigned tree node.
         if (reachedPowerOfTwoCheckpoint(nodesProcessed) ||
             pendingBranches.empty()) {
-            for (TreeNodeId id = nodeCount; id-- > 0;) {
+            for (NodeId id = nodeCount; id-- > 0;) {
                 const MaybeTourNodeHandle handle = tour_.visitFor(id);
                 if (!handle) continue;
                 if (reachedPowerOfTwoCheckpoint(
                         tour_.recordInsertion(*handle))) {
-                    DBG("Optimizing TourNode handle="
-                        << formatHandle(*handle) << " at ("
+                    DBG("Optimizing tour visit at ("
                         << bg::get<0>(tour_.point(*handle)) << ", "
                         << bg::get<1>(tour_.point(*handle)) << ")");
-                    tour_.optimizeVisit(*handle, treeNodes_);
+                    tour_.optimizeVisit(*handle, mergeTree_);
                 }
             }
 
-            for (TreeNodeId id = nodeCount; id-- > 0;) {
+            for (NodeId id = nodeCount; id-- > 0;) {
                 DBG("Processing node id=" << id
                     << " for energy reduction.");
                 const MaybeTourNodeHandle handle = tour_.visitFor(id);
                 if (!handle || !tour_.consumeEnergy(*handle)) continue;
 
-                std::vector<TreeNodeId> assignments =
+                std::vector<NodeId> assignments =
                     tour_.eraseVisit(*handle);
-                sortByRadius(assignments, treeNodes_);
-                for (TreeNodeId assignment : assignments) {
+                sortByRadius(assignments, mergeTree_);
+                for (NodeId assignment : assignments) {
                     insertCircle(assignment);
                 }
             }
 
-            for (TreeNodeId id = nodeCount; id-- > 0;) {
+            for (NodeId id = nodeCount; id-- > 0;) {
                 const MaybeTourNodeHandle handle = tour_.visitFor(id);
                 if (!handle) continue;
                 if (reachedPowerOfTwoCheckpoint(
                         tour_.recordInsertion(*handle))) {
-                    DBG("Optimizing TourNode handle="
-                        << formatHandle(*handle) << " at ("
+                    DBG("Optimizing tour visit at ("
                         << bg::get<0>(tour_.point(*handle)) << ", "
                         << bg::get<1>(tour_.point(*handle)) << ")");
-                    tour_.optimizeVisit(*handle, treeNodes_);
+                    tour_.optimizeVisit(*handle, mergeTree_);
                 }
             }
         }
@@ -337,7 +324,7 @@ std::vector<Point> TourReconstructor::reconstruct() {
 
 } // namespace
 
-std::vector<Point> reconstructTour(const std::vector<TreeNode>& treeNodes) {
-    TourReconstructor reconstructor(treeNodes);
+std::vector<Point> reconstructTour(const MergeTree& mergeTree) {
+    TourReconstructor reconstructor(mergeTree);
     return reconstructor.reconstruct();
 }

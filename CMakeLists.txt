@@ -77,6 +77,7 @@ endfunction()
 add_library(cetsp_core STATIC
   src/solver.cpp
   src/circle_geometry.cpp
+  src/merge_tree.cpp
   src/merge.cpp
   src/tour.cpp
   src/reconstruct.cpp

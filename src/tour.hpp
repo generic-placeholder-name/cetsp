@@ -14,21 +14,51 @@
 #include <utility>
 #include <vector>
 
-struct TourNodeHandle {
-    std::size_t slot;
-    std::size_t generation;
+class Tour;
 
-    constexpr TourNodeHandle(
-        std::size_t slotIndex,
-        std::size_t generationValue) noexcept
-        : slot(slotIndex), generation(generationValue) {}
-
+class TourNodeHandle {
+public:
     friend constexpr bool operator==(
         const TourNodeHandle&,
         const TourNodeHandle&) = default;
+
+private:
+    constexpr TourNodeHandle(
+        std::size_t slot,
+        std::size_t generation) noexcept
+        : slot_(slot), generation_(generation) {}
+
+    std::size_t slot_;
+    std::size_t generation_;
+
+    friend class Tour;
 };
 
 using MaybeTourNodeHandle = std::optional<TourNodeHandle>;
+
+// A directed tour edge and its endpoint positions at query time. Mutating the
+// tour may invalidate its handles and make the point snapshot stale.
+class TourEdge {
+public:
+    [[nodiscard]] TourNodeHandle start() const noexcept;
+    [[nodiscard]] TourNodeHandle end() const noexcept;
+    [[nodiscard]] const Point& startPoint() const noexcept;
+    [[nodiscard]] const Point& endPoint() const noexcept;
+
+private:
+    TourEdge(
+        TourNodeHandle start,
+        TourNodeHandle end,
+        Point startPoint,
+        Point endPoint);
+
+    TourNodeHandle start_;
+    TourNodeHandle end_;
+    Point startPoint_;
+    Point endPoint_;
+
+    friend class Tour;
+};
 
 // Owns the cyclic visit topology and every index that observes it. Mutations
 // keep node storage, links, spatial indexes, and tree-node assignments in sync.
@@ -45,33 +75,33 @@ public:
     [[nodiscard]] std::size_t size() const noexcept;
 
     [[nodiscard]] MaybeTourNodeHandle visitFor(
-        TreeNodeId treeNodeId) const;
+        MergeTree::NodeId treeNodeId) const;
     [[nodiscard]] Point point(TourNodeHandle handle) const;
     [[nodiscard]] TourNodeHandle previous(TourNodeHandle handle) const;
     [[nodiscard]] TourNodeHandle next(TourNodeHandle handle) const;
 
     [[nodiscard]] MaybeTourNodeHandle nearestVisit(
         const Point& point) const;
-    [[nodiscard]] std::vector<TourNodeHandle> nearestEdgeStarts(
+    [[nodiscard]] std::vector<TourEdge> nearestEdges(
         const Point& point,
         std::size_t maximumCount) const;
 
     [[nodiscard]] TourNodeHandle createFirstVisit(
         const Point& point,
-        TreeNodeId treeNodeId,
+        MergeTree::NodeId treeNodeId,
         std::size_t initialEnergy);
     [[nodiscard]] TourNodeHandle insertVisitBetween(
         const Point& point,
-        TreeNodeId treeNodeId,
+        MergeTree::NodeId treeNodeId,
         TourNodeHandle previous,
         TourNodeHandle following,
         std::size_t initialEnergy);
     void addAssignment(
         TourNodeHandle handle,
-        TreeNodeId treeNodeId,
+        MergeTree::NodeId treeNodeId,
         std::size_t energyIncrease);
-    void removeAssignment(TreeNodeId treeNodeId);
-    [[nodiscard]] std::vector<TreeNodeId> eraseVisit(
+    void removeAssignment(MergeTree::NodeId treeNodeId);
+    [[nodiscard]] std::vector<MergeTree::NodeId> eraseVisit(
         TourNodeHandle handle);
 
     // Returns true when the visit has no energy remaining.
@@ -83,7 +113,7 @@ public:
     // Optimizes one visit while preserving all structural and spatial indexes.
     void optimizeVisit(
         TourNodeHandle handle,
-        const std::vector<TreeNode>& treeNodes);
+        const MergeTree& mergeTree);
 
     [[nodiscard]] std::vector<Point> points() const;
     void assertValid() const;
@@ -101,15 +131,17 @@ private:
 
     struct Node {
         Point pos;
-        IdSet<TreeNodeId> assignedTreeNodes;
+        IdSet<MergeTree::NodeId> assignedTreeNodes;
         std::size_t energy;
         std::size_t insertions;
+        // Generation-checked links survive arena relocation and detect any
+        // accidentally retained reference to a recycled slot.
         TourNodeHandle prev;
         TourNodeHandle next;
 
         Node(
             const Point& point,
-            TreeNodeId treeNodeId,
+            MergeTree::NodeId treeNodeId,
             std::size_t initialEnergy,
             TourNodeHandle previous,
             TourNodeHandle following);
@@ -124,12 +156,12 @@ private:
     [[nodiscard]] const Node* resolve(TourNodeHandle handle) const noexcept;
     [[nodiscard]] Node& requireNode(TourNodeHandle handle);
     [[nodiscard]] const Node& requireNode(TourNodeHandle handle) const;
-    void requireUnassignedTreeNode(TreeNodeId treeNodeId) const;
+    void requireUnassignedTreeNode(MergeTree::NodeId treeNodeId) const;
     [[nodiscard]] std::string formatHandle(
         MaybeTourNodeHandle handle) const;
     [[nodiscard]] TourNodeHandle createNode(
         const Point& point,
-        TreeNodeId treeNodeId,
+        MergeTree::NodeId treeNodeId,
         std::size_t initialEnergy,
         MaybeTourNodeHandle previous = std::nullopt,
         MaybeTourNodeHandle following = std::nullopt);
