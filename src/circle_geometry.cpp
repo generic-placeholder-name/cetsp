@@ -3,7 +3,6 @@
 #include <boost/geometry.hpp>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <limits>
 #include <numbers>
@@ -43,129 +42,155 @@ double bearingFrom(const Point& origin, const Point& target) {
         bg::get<0>(target) - bg::get<0>(origin));
 }
 
-struct BoundaryPathObjective {
-    const Point& center;
-    double radius;
+struct AngularDerivatives {
+    double first;
+    double second;
+};
+
+struct BoundaryCandidate {
+    double angle;
+    double cost;
+};
+
+struct BoundaryMotion {
+    double pointX;
+    double pointY;
+    double velocityX;
+    double velocityY;
+    double accelerationX;
+    double accelerationY;
+    double velocitySquared;
+};
+
+AngularDerivatives endpointDistanceDerivatives(
+    const BoundaryMotion& motion,
+    const Point& endpoint) {
+    const double offsetX =
+        motion.pointX - bg::get<0>(endpoint);
+    const double offsetY =
+        motion.pointY - bg::get<1>(endpoint);
+    const double distance = std::hypot(offsetX, offsetY);
+    const double directionalRate =
+        offsetX * motion.velocityX + offsetY * motion.velocityY;
+    return {
+        directionalRate / distance,
+        (motion.velocitySquared +
+         offsetX * motion.accelerationX +
+         offsetY * motion.accelerationY) /
+                distance -
+            directionalRate * directionalRate /
+                (distance * distance * distance),
+    };
+}
+
+struct BoundaryObjective {
+    const Circle& neighborhood;
     const Point& edgeStart;
     const Point& edgeEnd;
 
     [[nodiscard]] Point pointAt(double angle) const {
         return Point{
-            bg::get<0>(center) + radius * std::cos(angle),
-            bg::get<1>(center) + radius * std::sin(angle)};
+            bg::get<0>(neighborhood.center) +
+                neighborhood.r * std::cos(angle),
+            bg::get<1>(neighborhood.center) +
+                neighborhood.r * std::sin(angle)};
     }
 
-    [[nodiscard]] double costAt(double angle) const {
+    [[nodiscard]] BoundaryCandidate evaluate(double angle) const {
         const Point point = pointAt(angle);
-        return bg::distance(edgeStart, point) +
-               bg::distance(point, edgeEnd);
+        return {
+            angle,
+            bg::distance(edgeStart, point) +
+                bg::distance(point, edgeEnd),
+        };
     }
-
-    struct AngularDerivatives {
-        double first;
-        double second;
-    };
 
     [[nodiscard]] AngularDerivatives derivativesAt(double angle) const {
         const double cosine = std::cos(angle);
         const double sine = std::sin(angle);
         const Point point = pointAt(angle);
-        const double pointX = bg::get<0>(point);
-        const double pointY = bg::get<1>(point);
-        const double velocityX = -radius * sine;
-        const double velocityY = radius * cosine;
-        const double accelerationX = -radius * cosine;
-        const double accelerationY = -radius * sine;
-        const double velocitySquared = radius * radius;
-
-        AngularDerivatives result{0.0, 0.0};
-        const std::array<const Point*, 2> endpoints{
-            &edgeStart,
-            &edgeEnd,
+        const double radius = neighborhood.r;
+        const BoundaryMotion motion{
+            bg::get<0>(point),
+            bg::get<1>(point),
+            -radius * sine,
+            radius * cosine,
+            -radius * cosine,
+            -radius * sine,
+            radius * radius,
         };
-        for (const Point* endpoint : endpoints) {
-            const double offsetX = pointX - bg::get<0>(*endpoint);
-            const double offsetY = pointY - bg::get<1>(*endpoint);
-            const double distance = std::hypot(offsetX, offsetY);
-            const double directionalRate =
-                offsetX * velocityX + offsetY * velocityY;
-            result.first += directionalRate / distance;
-            result.second +=
-                (velocitySquared +
-                 offsetX * accelerationX +
-                 offsetY * accelerationY) /
-                    distance -
-                directionalRate * directionalRate /
-                    (distance * distance * distance);
-        }
-        return result;
+
+        const AngularDerivatives start =
+            endpointDistanceDerivatives(motion, edgeStart);
+        const AngularDerivatives end =
+            endpointDistanceDerivatives(motion, edgeEnd);
+        return {
+            start.first + end.first,
+            start.second + end.second,
+        };
     }
 };
 
-struct BoundarySample {
-    double angle;
-    double cost;
-};
-
-Point chooseBoundaryPoint(
-    const BoundaryPathObjective& objective,
-    const Point& closestEdgePoint) {
+BoundaryCandidate chooseInitialBoundaryCandidate(
+    const BoundaryObjective& objective,
+    const Point& closestApproach) {
     const double firstBearing =
-        bearingFrom(objective.center, objective.edgeStart);
+        bearingFrom(objective.neighborhood.center, objective.edgeStart);
     const double secondBearing =
-        bearingFrom(objective.center, objective.edgeEnd);
+        bearingFrom(objective.neighborhood.center, objective.edgeEnd);
     const double bisectorX =
         std::cos(firstBearing) + std::cos(secondBearing);
     const double bisectorY =
         std::sin(firstBearing) + std::sin(secondBearing);
     const double closestBearing =
-        bearingFrom(objective.center, closestEdgePoint);
+        bearingFrom(objective.neighborhood.center, closestApproach);
     const double bisectorBearing =
         std::hypot(bisectorX, bisectorY) >
                 32.0 * std::numeric_limits<double>::epsilon()
             ? std::atan2(bisectorY, bisectorX)
             : closestBearing;
 
-    const std::array<double, 2> seedAngles{
-        closestBearing,
-        bisectorBearing,
-    };
-    // These cover the two useful geometric views of the edge: its closest
-    // approach to the circle and the average direction of its endpoints.
-    BoundarySample best{
-        seedAngles.front(),
-        objective.costAt(seedAngles.front()),
-    };
-    for (std::size_t index = 1; index < seedAngles.size(); ++index) {
-        const double angle = seedAngles[index];
-        const double cost = objective.costAt(angle);
-        if (cost < best.cost) {
-            best = {angle, cost};
-        }
-    }
+    // Compare the edge's closest approach with the circular mean of the two
+    // endpoint directions.
+    const BoundaryCandidate closest = objective.evaluate(closestBearing);
+    const BoundaryCandidate bisector = objective.evaluate(bisectorBearing);
+    return bisector.cost < closest.cost ? bisector : closest;
+}
 
-    const BoundaryPathObjective::AngularDerivatives derivatives =
-        objective.derivativesAt(best.angle);
+BoundaryCandidate refineBoundaryCandidateOnce(
+    const BoundaryObjective& objective,
+    const BoundaryCandidate& candidate) {
+    const AngularDerivatives derivatives =
+        objective.derivativesAt(candidate.angle);
     const double curvatureTolerance =
         std::numeric_limits<double>::epsilon() *
-        std::max(1.0, std::abs(best.cost));
-    if (std::isfinite(derivatives.first) &&
-        std::isfinite(derivatives.second) &&
-        derivatives.second > curvatureTolerance) {
-        // One refinement only. The modulo preserves the point represented by
-        // a large Newton step while keeping trigonometric range reduction tame.
-        const double rawStep = -derivatives.first / derivatives.second;
-        if (std::isfinite(rawStep)) {
-            const double refinedAngle =
-                best.angle + std::remainder(rawStep, fullTurn);
-            const double refinedCost = objective.costAt(refinedAngle);
-            if (refinedCost < best.cost) {
-                best = {refinedAngle, refinedCost};
-            }
-        }
+        std::max(1.0, std::abs(candidate.cost));
+    if (!std::isfinite(derivatives.first) ||
+        !std::isfinite(derivatives.second) ||
+        derivatives.second <= curvatureTolerance) {
+        return candidate;
     }
 
-    return objective.pointAt(best.angle);
+    // One refinement only. The modulo preserves the point represented by a
+    // large Newton step while keeping trigonometric range reduction tame.
+    const double rawStep = -derivatives.first / derivatives.second;
+    if (!std::isfinite(rawStep)) {
+        return candidate;
+    }
+
+    const BoundaryCandidate refined = objective.evaluate(
+        candidate.angle + std::remainder(rawStep, fullTurn));
+    return refined.cost < candidate.cost ? refined : candidate;
+}
+
+Point chooseBoundaryInsertionPoint(
+    const BoundaryObjective& objective,
+    const Point& closestApproach) {
+    const BoundaryCandidate initial =
+        chooseInitialBoundaryCandidate(objective, closestApproach);
+    const BoundaryCandidate refined =
+        refineBoundaryCandidateOnce(objective, initial);
+    return objective.pointAt(refined.angle);
 }
 
 } // namespace
@@ -208,13 +233,12 @@ Point chooseInsertionPoint(
         return closestEdgePoint;
     }
 
-    const BoundaryPathObjective objective{
-        center,
-        radius,
+    const BoundaryObjective objective{
+        neighborhood,
         edgeStart,
         edgeEnd,
     };
-    return chooseBoundaryPoint(objective, closestEdgePoint);
+    return chooseBoundaryInsertionPoint(objective, closestEdgePoint);
 }
 
 Circle makeCombinedCircle(
