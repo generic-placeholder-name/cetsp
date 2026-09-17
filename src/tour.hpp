@@ -169,11 +169,11 @@ private:
     void deleteNode(TourNodeHandle handle);
 
     // Declared before observers and indexes so it is destroyed after them.
-    std::vector<NodeSlot> nodeSlots;
-    std::vector<std::size_t> freeSlots;
-    std::size_t liveNodeCount = 0;
-    MaybeTourNodeHandle head;
-    PointIndex pointIndex;
-    SegmentIndex segmentIndex;
-    std::vector<MaybeTourNodeHandle> tourNodeForTreeNode;
+    std::vector<NodeSlot> nodeSlots_;
+    std::vector<std::size_t> freeSlots_;
+    std::size_t liveNodeCount_ = 0;
+    MaybeTourNodeHandle head_;
+    PointIndex pointIndex_;
+    SegmentIndex segmentIndex_;
+    std::vector<MaybeTourNodeHandle> tourNodeForTreeNode_;
 };
